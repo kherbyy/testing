@@ -1,5 +1,6 @@
--- LocalScript: Triggerbot + Advanced ESP + Debugging Tools + VIP Commands
--- Includes all VIP functions from provided script for actual teleportation without anti-cheat bypass.
+```lua
+-- LocalScript: Triggerbot + Advanced ESP + Debugging Tools + VIP Group Teleport
+-- Replicates original script's VIP whitelist and .g/.s commands for actual teleportation.
 
 --// Services
 local Players = game:GetService("Players")
@@ -219,149 +220,21 @@ RunService:BindToRenderStep("WaveESP_Render", Enum.RenderPriority.Camera.Value, 
     end
 end)
 
---// VIP Whitelist
-local vip_whitelist = {
-    ["misiuperc568"] = true,
-    ["afasterpl11"] = true
+--// VIP Whitelist (copied from original script)
+local VIPUsers = {
+    ["draconvm"] = true,
+    ["gachlasmu6"] = true
     -- Add your username or more VIP usernames here
 }
 
---// Bring Targets and Frozen Players
+--// Bring Targets for smooth teleportation
 local BringTargets = {}
-local FrozenPlayers = {}
 
---// VIP Functions
-local function teleportToPlayer(targetName)
-    if not vip_whitelist[LocalPlayer.Name] then
-        StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[VIP] You are not in the VIP whitelist."})
-        if debugMode then print("[VIP Debug] Local player " .. LocalPlayer.Name .. " not in vip_whitelist for .tp") end
-        return
-    end
-    local targetPlayer = Players:FindFirstChild(targetName)
-    local myChar = LocalPlayer.Character
-    if targetPlayer and targetPlayer.Character and myChar then
-        local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-        local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-        if targetRoot and myRoot then
-            pcall(function()
-                myRoot.CFrame = targetRoot.CFrame + Vector3.new(0, 3, 0)
-                if debugMode then print("[VIP Debug] Teleported " .. LocalPlayer.Name .. " to " .. targetName) end
-                StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[VIP] Teleported to " .. targetName})
-            end)
-        else
-            if debugMode then print("[VIP Debug] Failed to teleport to " .. targetName .. ": Missing HumanoidRootPart") end
-        end
-    else
-        if debugMode then print("[VIP Debug] Failed to teleport to " .. targetName .. ": Invalid player or character") end
-    end
-end
-
-local function freezeAllPlayers(senderName)
-    if not vip_whitelist[senderName] then
-        if debugMode then print("[VIP Debug] " .. senderName .. " not in vip_whitelist for .f") end
-        return
-    end
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player.Character and player.Name ~= senderName and not FrozenPlayers[player.Name] then
-            local root = player.Character:FindFirstChild("HumanoidRootPart")
-            if root then
-                pcall(function()
-                    root.Anchored = true
-                    FrozenPlayers[player.Name] = true
-                    if debugMode then print("[VIP Debug] Froze " .. player.Name) end
-                end)
-            end
-        end
-    end
-    StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[VIP] Froze all players."})
-end
-
-local function unfreezeAllPlayers(senderName)
-    if not vip_whitelist[senderName] then
-        if debugMode then print("[VIP Debug] " .. senderName .. " not in vip_whitelist for .u") end
-        return
-    end
-    for name, _ in pairs(FrozenPlayers) do
-        if name ~= senderName then
-            local player = Players:FindFirstChild(name)
-            if player and player.Character then
-                local root = player.Character:FindFirstChild("HumanoidRootPart")
-                if root then
-                    pcall(function()
-                        root.Anchored = false
-                        if debugMode then print("[VIP Debug] Unfroze " .. name) end
-                    end)
-                end
-            end
-            FrozenPlayers[name] = nil
-        end
-    end
-    StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[VIP] Unfroze all players."})
-end
-
-local function killAllOtherPlayers(senderName)
-    if not vip_whitelist[senderName] then
-        if debugMode then print("[VIP Debug] " .. senderName .. " not in vip_whitelist for .r") end
-        return
-    end
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player.Name ~= senderName then
-            local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-            if hum then
-                pcall(function()
-                    hum.Health = 0
-                    if debugMode then print("[VIP Debug] Killed " .. player.Name) end
-                end)
-            end
-        end
-    end
-    StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[VIP] Killed all other players."})
-end
-
-local function flingPlayer(senderName)
-    if not vip_whitelist[senderName] then
-        if debugMode then print("[VIP Debug] " .. senderName .. " not in vip_whitelist for .fling") end
-        return
-    end
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player.Name ~= senderName then
-            if player.Character then
-                local root = player.Character:FindFirstChild("HumanoidRootPart")
-                if root then
-                    pcall(function()
-                        local bv = Instance.new("BodyVelocity")
-                        bv.Velocity = Vector3.new(math.random(-1500, 1500), 800, math.random(-1500, 1500))
-                        bv.MaxForce = Vector3.new(1e6, 1e6, 1e6)
-                        bv.P = 1e5
-                        bv.Parent = root
-                        task.delay(0.3, function() bv:Destroy() end)
-                        if debugMode then print("[VIP Debug] Flung " .. player.Name) end
-                    end)
-                end
-            end
-        end
-    end
-    StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[VIP] Flung all other players."})
-end
-
-local function kickPlayer(senderName)
-    if not vip_whitelist[senderName] then
-        if debugMode then print("[VIP Debug] " .. senderName .. " not in vip_whitelist for .k") end
-        return
-    end
-    if LocalPlayer.Name ~= senderName then
-        pcall(function()
-            LocalPlayer:Kick("Kicked by VIP")
-            if debugMode then print("[VIP Debug] Kicked " .. LocalPlayer.Name .. " by " .. senderName) end
-        end)
-    end
-end
-
---// Smooth Bring Loop
+--// Smooth Bring Loop (exact replica from original script)
 RunService.RenderStepped:Connect(function()
     for targetName, _ in pairs(BringTargets) do
         local targetPlayer = Players:FindFirstChild(targetName)
-        for vipName, _ in ipairs(vip_whitelist) do
+        for _, vipName in ipairs(VIPUsers) do
             local vipPlayer = Players:FindFirstChild(vipName)
             if vipPlayer and vipPlayer.Character and targetPlayer and targetPlayer.Character and targetPlayer ~= vipPlayer then
                 local vipRoot = vipPlayer.Character:FindFirstChild("HumanoidRootPart")
@@ -423,9 +296,13 @@ local function toggleESPFor(search)
 end
 
 local function teleportGroup()
-    if not vip_whitelist[LocalPlayer.Name] then
+    local vip = false
+    for _, v in ipairs(VIPUsers) do
+        if LocalPlayer.Name:lower() == v:lower() then vip = true break end
+    end
+    if not vip then
         StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] You are not in the VIP whitelist."})
-        if debugMode then print("[GroupTP Debug] Local player " .. LocalPlayer.Name .. " not in vip_whitelist") end
+        if debugMode then print("[GroupTP Debug] Local player " .. LocalPlayer.Name .. " not in VIPUsers") end
         return
     end
     local char = LocalPlayer.Character
@@ -437,16 +314,16 @@ local function teleportGroup()
     end
     local teleported = 0
     for _, p in ipairs(Players:GetPlayers()) do
-        if vip_whitelist[p.Name] and p ~= LocalPlayer then
-            if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                BringTargets[p.Name] = true
-                teleported = teleported + 1
-                if debugMode then print("[GroupTP Debug] Added " .. p.Name .. " to BringTargets") end
-            else
-                if debugMode then print("[GroupTP Debug] No HumanoidRootPart for " .. p.Name) end
+        for _, vipName in ipairs(VIPUsers) do
+            if p.Name:lower() == vipName:lower() and p ~= LocalPlayer then
+                if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    BringTargets[p.Name] = true
+                    teleported = teleported + 1
+                    if debugMode then print("[GroupTP Debug] Added " .. p.Name .. " to BringTargets") end
+                else
+                    if debugMode then print("[GroupTP Debug] No HumanoidRootPart for " .. p.Name) end
+                end
             end
-        else
-            if debugMode then print("[GroupTP Debug] Skipped " .. p.Name .. ": Not in vip_whitelist or is local player") end
         end
     end
     StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] Teleporting " .. teleported .. " VIP player(s) to you."})
@@ -454,9 +331,13 @@ local function teleportGroup()
 end
 
 local function stopTeleportGroup()
-    if not vip_whitelist[LocalPlayer.Name] then
+    local vip = false
+    for _, v in ipairs(VIPUsers) do
+        if LocalPlayer.Name:lower() == v:lower() then vip = true break end
+    end
+    if not vip then
         StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] You are not in the VIP whitelist."})
-        if debugMode then print("[GroupTP Debug] Local player " .. LocalPlayer.Name .. " not in vip_whitelist for .s") end
+        if debugMode then print("[GroupTP Debug] Local player " .. LocalPlayer.Name .. " not in VIPUsers for .s") end
         return
     end
     local stopped = 0
@@ -469,107 +350,67 @@ local function stopTeleportGroup()
     if debugMode then print("[GroupTP Debug] Command .s executed by " .. LocalPlayer.Name .. ", stopped " .. stopped .. " players") end
 end
 
---// Handle incoming commands
-local function handleIncomingCommand(senderName, msg)
-    if not senderName or not msg then
-        if debugMode then print("[VIP Debug] Invalid senderName or msg: " .. tostring(senderName) .. ", " .. tostring(msg)) end
-        return
+--// Handle incoming .g/.s commands (copied from original script)
+local function onMessage(sender, msg)
+    local vip = false
+    for _, v in ipairs(VIPUsers) do
+        if sender:lower() == v:lower() then vip = true break end
     end
-    local args = string.split(msg, " ")
-    local cmd = (args[1] or ""):lower()
-    if not vip_whitelist[senderName] then
-        if debugMode then print("[VIP Debug] Ignored command " .. cmd .. " from " .. senderName .. ": Not in VIP whitelist") end
+    if not vip then
+        if debugMode then print("[GroupTP Debug] Ignored command from " .. sender .. ": Not in VIPUsers") end
         return
     end
 
-    if cmd == ".g" or cmd == "/g" or cmd == "g" then
-        if vip_whitelist[LocalPlayer.Name] then
-            local senderPlayer = Players:FindFirstChild(senderName)
-            if senderPlayer and senderPlayer.Character and LocalPlayer.Character then
-                local senderHRP = senderPlayer.Character:FindFirstChild("HumanoidRootPart")
-                local myHRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                if senderHRP and myHRP then
-                    pcall(function()
-                        BringTargets[LocalPlayer.Name] = true
-                        if debugMode then print("[GroupTP Debug] Added " .. LocalPlayer.Name .. " to BringTargets for " .. senderName) end
-                        StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] Teleporting to " .. senderName})
-                    end)
-                else
-                    if debugMode then print("[GroupTP Debug] Failed to teleport to " .. senderName .. ": Missing HumanoidRootPart") end
-                end
-            else
-                if debugMode then print("[GroupTP Debug] Failed to teleport to " .. senderName .. ": Invalid sender or local character") end
-            end
-        else
-            if debugMode then print("[GroupTP Debug] Ignored .g from " .. senderName .. ": Local player not in VIP whitelist") end
-        end
-    elseif cmd == ".s" or cmd == "/s" or cmd == "s" then
-        if vip_whitelist[LocalPlayer.Name] then
-            if BringTargets[LocalPlayer.Name] then
-                BringTargets[LocalPlayer.Name] = nil
-                if debugMode then print("[GroupTP Debug] Removed " .. LocalPlayer.Name .. " from BringTargets for " .. senderName) end
-                StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] Stopped teleporting to " .. senderName})
-            else
-                if debugMode then print("[GroupTP Debug] Ignored .s from " .. senderName .. ": Not in BringTargets") end
-            end
-        else
-            if debugMode then print("[GroupTP Debug] Ignored .s from " .. senderName .. ": Local player not in VIP whitelist") end
-        end
-    elseif cmd == ".h" then
-        local targetName = args[2]
-        if targetName then
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p.Name:lower() == targetName:lower() or (p.DisplayName and p.DisplayName:lower() == targetName:lower()) then
-                    if not perTarget[p.Name] then
-                        perTarget[p.Name] = true
-                        if debugMode then print("[VIP Debug] Enabled ESP for " .. p.Name .. " by " .. senderName) end
-                        StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[VIP] Enabled ESP for " .. p.Name})
+    local args = msg:split(" ")
+    local cmd = (args[1] or ""):lower()
+
+    if cmd == ".g" then
+        local senderPlayer = Players:FindFirstChild(sender)
+        for _, vipName in ipairs(VIPUsers) do
+            if LocalPlayer.Name:lower() == vipName:lower() and LocalPlayer.Name ~= sender then
+                if senderPlayer and senderPlayer.Character and LocalPlayer.Character then
+                    local senderHRP = senderPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    local myHRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if senderHRP and myHRP then
+                        pcall(function()
+                            BringTargets[LocalPlayer.Name] = true
+                            if debugMode then print("[GroupTP Debug] Added " .. LocalPlayer.Name .. " to BringTargets for " .. sender) end
+                            StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] Teleporting to " .. sender})
+                        end)
+                    else
+                        if debugMode then print("[GroupTP Debug] Failed to teleport to " .. sender .. ": Missing HumanoidRootPart") end
                     end
+                else
+                    if debugMode then print("[GroupTP Debug] Failed to teleport to " .. sender .. ": Invalid sender or local character") end
                 end
             end
-        else
-            if debugMode then print("[VIP Debug] No target name provided for .h by " .. senderName) end
         end
-    elseif cmd == ".j" then
-        for name, _ in pairs(perTarget) do
-            perTarget[name] = nil
-            if debugMode then print("[VIP Debug] Cleared ESP for " .. name .. " by " .. senderName) end
-        end
-        StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[VIP] Cleared all ESP targets."})
-    elseif cmd == ".k" then
-        kickPlayer(senderName)
-    elseif cmd == ".f" then
-        freezeAllPlayers(senderName)
-    elseif cmd == ".u" then
-        unfreezeAllPlayers(senderName)
-    elseif cmd == ".tp" and args[2] then
-        if LocalPlayer.Name ~= senderName then
-            teleportToPlayer(args[2])
-        else
-            if debugMode then print("[VIP Debug] Ignored .tp from " .. senderName .. ": Cannot teleport to self") end
-        end
-    elseif cmd == ".fling" then
-        flingPlayer(senderName)
-    elseif cmd == ".r" then
-        if LocalPlayer.Name ~= senderName then
-            killAllOtherPlayers(senderName)
-        else
-            if debugMode then print("[VIP Debug] Ignored .r from " .. senderName .. ": Cannot kill self") end
+    elseif cmd == ".s" then
+        for _, vipName in ipairs(VIPUsers) do
+            if LocalPlayer.Name:lower() == vipName:lower() then
+                if BringTargets[LocalPlayer.Name] then
+                    BringTargets[LocalPlayer.Name] = nil
+                    if debugMode then print("[GroupTP Debug] Removed " .. LocalPlayer.Name .. " from BringTargets for " .. sender) end
+                    StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] Stopped teleporting to " .. sender})
+                else
+                    if debugMode then print("[GroupTP Debug] Ignored .s from " .. sender .. ": Not in BringTargets") end
+                end
+            end
         end
     end
 end
 
-for _, pl in ipairs(Players:GetPlayers()) do
-    if pl ~= LocalPlayer then
+for _, p in ipairs(Players:GetPlayers()) do
+    if p ~= LocalPlayer then
         pcall(function()
-            pl.Chatted:Connect(function(txt) handleIncomingCommand(pl.Name, txt) end)
+            p.Chatted:Connect(function(msg) onMessage(p.Name, msg) end)
         end)
     end
 end
-Players.PlayerAdded:Connect(function(pl)
-    if pl ~= LocalPlayer then
+Players.PlayerAdded:Connect(function(p)
+    if p ~= LocalPlayer then
         pcall(function()
-            pl.Chatted:Connect(function(txt) handleIncomingCommand(pl.Name, txt) end)
+            p.Chatted:Connect(function(msg) onMessage(p.Name, msg) end)
         end)
     end
 end)
@@ -577,7 +418,7 @@ end)
 --// Process local commands
 local function processCommand(msg)
     if not msg then
-        if debugMode then print("[VIP Debug] Invalid command message: " .. tostring(msg)) end
+        if debugMode then print("[GroupTP Debug] Invalid command message: " .. tostring(msg)) end
         return
     end
     local parts = string.split(msg, " ")
@@ -591,43 +432,6 @@ local function processCommand(msg)
     elseif cmd == ".s" or cmd == "/s" or cmd == "s" then
         if debugMode then print("[GroupTP Debug] Processing .s command from " .. LocalPlayer.Name) end
         stopTeleportGroup()
-    elseif cmd == ".h" and parts[2] then
-        if vip_whitelist[LocalPlayer.Name] then
-            local targetName = parts[2]
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p.Name:lower() == targetName:lower() or (p.DisplayName and p.DisplayName:lower() == targetName:lower()) then
-                    if not perTarget[p.Name] then
-                        perTarget[p.Name] = true
-                        if debugMode then print("[VIP Debug] Enabled ESP for " .. p.Name .. " by " .. LocalPlayer.Name) end
-                        StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[VIP] Enabled ESP for " .. p.Name})
-                    end
-                end
-            end
-        else
-            if debugMode then print("[VIP Debug] Local player " .. LocalPlayer.Name .. " not in vip_whitelist for .h") end
-        end
-    elseif cmd == ".j" then
-        if vip_whitelist[LocalPlayer.Name] then
-            for name, _ in pairs(perTarget) do
-                perTarget[name] = nil
-                if debugMode then print("[VIP Debug] Cleared ESP for " .. name .. " by " .. LocalPlayer.Name) end
-            end
-            StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[VIP] Cleared all ESP targets."})
-        else
-            if debugMode then print("[VIP Debug] Local player " .. LocalPlayer.Name .. " not in vip_whitelist for .j") end
-        end
-    elseif cmd == ".k" then
-        kickPlayer(LocalPlayer.Name)
-    elseif cmd == ".f" then
-        freezeAllPlayers(LocalPlayer.Name)
-    elseif cmd == ".u" then
-        unfreezeAllPlayers(LocalPlayer.Name)
-    elseif cmd == ".tp" and parts[2] then
-        teleportToPlayer(parts[2])
-    elseif cmd == ".fling" then
-        flingPlayer(LocalPlayer.Name)
-    elseif cmd == ".r" then
-        killAllOtherPlayers(LocalPlayer.Name)
     end
 end
 
@@ -638,7 +442,7 @@ if TextChatService then
         commandsFolder = Instance.new("Folder")
         commandsFolder.Name = "TextChatCommands"
         commandsFolder.Parent = TextChatService
-        if debugMode then print("[VIP Debug] Created TextChatCommands folder") end
+        if debugMode then print("[GroupTP Debug] Created TextChatCommands folder") end
     end
 
     local function createCommand(name, primary, secondary)
@@ -650,7 +454,7 @@ if TextChatService then
             cmd.SecondaryAlias = secondary
             cmd.Enabled = true
             cmd.Parent = commandsFolder
-            if debugMode then print("[VIP Debug] Created " .. name) end
+            if debugMode then print("[GroupTP Debug] Created " .. name) end
         end
         return cmd
     end
@@ -658,15 +462,7 @@ if TextChatService then
     local commands = {
         {name = "WaveESPCommand", primary = ".e", secondary = "/e"},
         {name = "GroupTPCommand", primary = ".g", secondary = "/g"},
-        {name = "GroupStopCommand", primary = ".s", secondary = "/s"},
-        {name = "ESPAddCommand", primary = ".h", secondary = "/h"},
-        {name = "ESPClearCommand", primary = ".j", secondary = "/j"},
-        {name = "KickCommand", primary = ".k", secondary = "/k"},
-        {name = "FreezeCommand", primary = ".f", secondary = "/f"},
-        {name = "UnfreezeCommand", primary = ".u", secondary = "/u"},
-        {name = "TeleportCommand", primary = ".tp", secondary = "/tp"},
-        {name = "FlingCommand", primary = ".fling", secondary = "/fling"},
-        {name = "KillCommand", primary = ".r", secondary = "/r"}
+        {name = "GroupStopCommand", primary = ".s", secondary = "/s"}
     }
 
     for _, cmdInfo in ipairs(commands) do
@@ -687,9 +483,9 @@ if TextChatService then
                 if pl then senderName = pl.Name end
             end
 
-            if debugMode then print("[VIP Debug] TextChatCommand " .. cmdInfo.primary .. " triggered by " .. tostring(senderName) .. ": " .. tostring(message)) end
+            if debugMode then print("[GroupTP Debug] TextChatCommand " .. cmdInfo.primary .. " triggered by " .. tostring(senderName) .. ": " .. tostring(message)) end
             if senderName and senderName ~= LocalPlayer.Name then
-                pcall(function() handleIncomingCommand(senderName, message) end)
+                pcall(function() onMessage(senderName, message) end)
             end
 
             if uid and uid == LocalPlayer.UserId then processCommand(message) end
@@ -699,4 +495,5 @@ end
 
 pcall(function() LocalPlayer.Chatted:Connect(function(msg) processCommand(msg) end) end)
 
-StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[WaveAI] .e <partial> to toggle ESP | .e debug to toggle debug mode. VIP: .g, .s, .h <name>, .j, .k, .f, .u, .tp <name>, .fling, .r"})
+StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[WaveAI] .e <partial> to toggle ESP | .e debug to toggle debug mode. .g teleports VIP players to you, .s stops teleport (VIP only). Q toggles Triggerbot."})
+```
