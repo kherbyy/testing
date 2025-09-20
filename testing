@@ -258,8 +258,8 @@ end
 
 --// VIP Whitelist
 local vip_whitelist = {
-    ["K3TCHUPSS"] = true,
-    ["SYPMORPH"] = true
+    ["misiuperc568"] = true,
+    ["afasterpl11"] = true
     -- Add more VIP usernames here
 }
 
