@@ -274,9 +274,10 @@ local function teleportGroup()
 
     local char = LocalPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if not hrp then
-        StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] Failed: No HumanoidRootPart."})
-        print("[GroupTP Debug] Failed: Local player has no HumanoidRootPart")
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not hrp or not hum or hum.Health <= 0 then
+        StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] Failed: Invalid character or dead."})
+        print("[GroupTP Debug] Failed: Local player has no HumanoidRootPart or is dead")
         return
     end
 
@@ -285,12 +286,13 @@ local function teleportGroup()
         if vip_whitelist[p.Name] and p ~= LocalPlayer then
             local pc = p.Character
             local phrp = pc and pc:FindFirstChild("HumanoidRootPart")
-            if phrp then
+            local phum = pc and pc:FindFirstChildOfClass("Humanoid")
+            if phrp and phum and phum.Health > 0 then
                 pcall(function()
                     -- Attempt server-side teleport via RemoteEvent
                     local remote = ReplicatedStorage:FindFirstChild("Remote")
                     if remote and remote:IsA("RemoteEvent") then
-                        remote:FireServer("Teleport", phrp, hrp.CFrame + Vector3.new(2, 0, 0))
+                        remote:FireServer("Teleport", p, hrp.CFrame + Vector3.new(2, 0, 0))
                         print("[GroupTP Debug] Fired Remote:Teleport for " .. p.Name)
                     else
                         -- Fallback to client-side CFrame update
@@ -298,9 +300,9 @@ local function teleportGroup()
                         print("[GroupTP Debug] Client-side CFrame update for " .. p.Name)
                         -- Repeat CFrame update to reduce desync
                         task.spawn(function()
-                            for i = 1, 3 do
+                            for i = 1, 5 do
                                 task.wait(0.1)
-                                if phrp and hrp then
+                                if phrp and hrp and phum and phum.Health > 0 then
                                     phrp.CFrame = hrp.CFrame + Vector3.new(2, 0, 0)
                                     print("[GroupTP Debug] Repeated CFrame update " .. i .. " for " .. p.Name)
                                 end
@@ -310,7 +312,7 @@ local function teleportGroup()
                     teleported = teleported + 1
                 end)
             else
-                print("[GroupTP Debug] No HumanoidRootPart for " .. p.Name)
+                print("[GroupTP Debug] No HumanoidRootPart or dead for " .. p.Name)
             end
         end
     end
@@ -327,13 +329,15 @@ local function handleIncomingCommand(senderName, msg)
             local senderPlayer = Players:FindFirstChild(senderName)
             if senderPlayer and senderPlayer.Character and LocalPlayer.Character then
                 local senderHRP = senderPlayer.Character:FindFirstChild("HumanoidRootPart")
+                local senderHum = senderPlayer.Character:FindFirstChildOfClass("Humanoid")
                 local myHRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                if senderHRP and myHRP then
+                local myHum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+                if senderHRP and senderHum and senderHum.Health > 0 and myHRP and myHum and myHum.Health > 0 then
                     pcall(function()
                         -- Attempt server-side teleport via RemoteEvent
                         local remote = ReplicatedStorage:FindFirstChild("Remote")
                         if remote and remote:IsA("RemoteEvent") then
-                            remote:FireServer("Teleport", myHRP, senderHRP.CFrame + Vector3.new(1.5, 0, 0))
+                            remote:FireServer("Teleport", LocalPlayer, senderHRP.CFrame + Vector3.new(1.5, 0, 0))
                             print("[GroupTP Debug] Fired Remote:Teleport to " .. senderName)
                         else
                             -- Fallback to client-side CFrame update
@@ -341,9 +345,9 @@ local function handleIncomingCommand(senderName, msg)
                             print("[GroupTP Debug] Client-side CFrame update to " .. senderName)
                             -- Repeat CFrame update to reduce desync
                             task.spawn(function()
-                                for i = 1, 3 do
+                                for i = 1, 5 do
                                     task.wait(0.1)
-                                    if senderHRP and myHRP then
+                                    if senderHRP and myHRP and senderHum and senderHum.Health > 0 and myHum and myHum.Health > 0 then
                                         myHRP.CFrame = senderHRP.CFrame + Vector3.new(1.5, 0, 0)
                                         print("[GroupTP Debug] Repeated CFrame update " .. i .. " to " .. senderName)
                                     end
@@ -353,7 +357,7 @@ local function handleIncomingCommand(senderName, msg)
                         StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] Teleported to " .. senderName})
                     end)
                 else
-                    print("[GroupTP Debug] Failed to teleport to " .. senderName .. ": Missing HumanoidRootPart")
+                    print("[GroupTP Debug] Failed to teleport to " .. senderName .. ": Missing HumanoidRootPart or dead")
                 end
             else
                 print("[GroupTP Debug] Failed to teleport to " .. senderName .. ": Invalid sender or local character")
