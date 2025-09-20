@@ -1,0 +1,407 @@
+-- LocalScript: Triggerbot + Advanced ESP + Debugging Tools + Group Teleport
+-- This is the final, optimized script with all requested features.
+
+--// Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TextChatService = (pcall(function() return game:GetService("TextChatService") end) and game:GetService("TextChatService") or nil)
+local StarterGui = game:GetService("StarterGui")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local Mouse = LocalPlayer:GetMouse()
+
+--// === Triggerbot (Q toggle) ===
+local TriggerBot = {Enabled = false, Blacklist = {"Knife"}}
+local BlacklistCache = {}
+for _, n in ipairs(TriggerBot.Blacklist) do BlacklistCache[n:lower()] = true end
+local function isBlacklisted(tool) return tool and BlacklistCache[tool.Name:lower()] end
+
+local function getMouseTarget()
+    local target = Mouse.Target
+    if not target then return nil end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character and target:IsDescendantOf(p.Character) then return p end
+    end
+end
+
+local function getEquippedTool()
+    local c = LocalPlayer.Character
+    if not c then return nil end
+    for _, v in ipairs(c:GetChildren()) do if v:IsA("Tool") and not isBlacklisted(v) then return v end end
+end
+
+UserInputService.InputBegan:Connect(function(input,gp)
+    if gp then return end
+    if input.KeyCode == Enum.KeyCode.Q then
+        TriggerBot.Enabled = not TriggerBot.Enabled
+        StarterGui:SetCore("ChatMakeSystemMessage",{Text="[TriggerBot] "..(TriggerBot.Enabled and "ON" or "OFF")})
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if not TriggerBot.Enabled then return end
+    local tgt = getMouseTarget()
+    if tgt then
+        local tool = getEquippedTool()
+        if tool then pcall(function() tool:Activate() end) end
+    end
+end)
+
+--// === Drawing ESP Setup
+local DrawingAvailable = false
+pcall(function() if Drawing and Drawing.new then DrawingAvailable = true end end)
+if not DrawingAvailable then
+    StarterGui:SetCore("ChatMakeSystemMessage",{Text="[ESP] Drawing library not available — ESP disabled."})
+    return
+end
+
+--// ESP caches
+local esp = {}
+local perTarget = {}
+local debugMode = false
+local ESP_COLOR = Color3.fromRGB(0, 255, 255) -- Cyan
+
+--// Create ESP per player
+local function makeESPFor(p)
+    if esp[p] then return end
+
+    local nameText = Drawing.new("Text")
+    nameText.Size = 9
+    nameText.Color = ESP_COLOR
+    nameText.Center = true
+    nameText.Outline = true
+    nameText.Visible = false
+
+    local weaponText = Drawing.new("Text")
+    weaponText.Size = 9
+    weaponText.Color = ESP_COLOR
+    weaponText.Center = true
+    weaponText.Outline = true
+    weaponText.Visible = false
+
+    local function makeBar(color)
+        local bar = Drawing.new("Square")
+        bar.Filled = true
+        bar.Color = color
+        bar.Visible = false
+        return bar
+    end
+
+    -- Box ESP
+    local box = Drawing.new("Square")
+    box.Thickness = 1
+    box.Filled = false
+    box.Color = Color3.fromRGB(255,0,0)
+    box.Visible = false
+    box.ZIndex = 2
+
+    local boxOutline = Drawing.new("Square")
+    boxOutline.Thickness = 3
+    boxOutline.Filled = false
+    boxOutline.Color = Color3.fromRGB(0,0,0)
+    boxOutline.Visible = false
+    boxOutline.ZIndex = 1
+
+    esp[p] = {
+        Text = nameText,
+        WeaponText = weaponText,
+        HealthBG = makeBar(Color3.fromRGB(60,60,60)),
+        HealthBar = makeBar(Color3.fromRGB(0,255,0)),
+        ShieldBG = makeBar(Color3.fromRGB(60,60,60)),
+        ShieldBar = makeBar(Color3.fromRGB(0,150,255)),
+        Box = box,
+        BoxOutline = boxOutline
+    }
+end
+
+local function removeESPFor(p)
+    if esp[p] then
+        for _,v in pairs(esp[p]) do v:Remove() end
+        esp[p]=nil
+    end
+end
+
+for _, p in ipairs(Players:GetPlayers()) do if p ~= LocalPlayer then makeESPFor(p) end end
+Players.PlayerAdded:Connect(function(p) if p~=LocalPlayer then makeESPFor(p) end end)
+Players.PlayerRemoving:Connect(function(p) removeESPFor(p) perTarget[p.Name]=nil end)
+
+--// Update loop
+local function worldToViewportVec(pos)
+    local a,on = Camera:WorldToViewportPoint(pos)
+    return Vector2.new(a.X,a.Y), on, a.Z
+end
+
+RunService:BindToRenderStep("WaveESP_Render",Enum.RenderPriority.Camera.Value,function()
+    for p,d in pairs(esp) do
+        pcall(function()
+            local show = perTarget[p.Name]
+            if not show then
+                for _,v in pairs(d) do v.Visible=false end
+            else
+                local char = p.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                local equippedTool = char and char:FindFirstChildOfClass("Tool")
+                if hrp and hum then
+                    local cframe = char:GetModelCFrame()
+                    local pos,on,depth = worldToViewportVec(cframe.Position)
+                    if on then
+                        local scaleFactor = 1/(depth*math.tan(math.rad(Camera.FieldOfView/2))*2)*1000
+                        local width,height = math.round(4*scaleFactor), math.round(6*scaleFactor)
+                        local x,y = math.round(pos.X), math.round(pos.Y)
+
+                        -- Box
+                        d.Box.Size = Vector2.new(width,height)
+                        d.Box.Position = Vector2.new(x-width/2,y-height/2)
+                        d.Box.Visible=true
+                        d.BoxOutline.Size = d.Box.Size
+                        d.BoxOutline.Position = d.Box.Position
+                        d.BoxOutline.Visible=true
+
+                        -- Name
+                        d.Text.Text = (p.DisplayName or p.Name).." (@"..p.Name..")"
+                        d.Text.Position = Vector2.new(x,y-height/2-12)
+                        d.Text.Visible=true
+                        
+                        -- Weapon
+                        if equippedTool then
+                            d.WeaponText.Text = "["..equippedTool.Name.."]"
+                            d.WeaponText.Position = Vector2.new(x,y+height/2+12)
+                            d.WeaponText.Visible = true
+                        else
+                            d.WeaponText.Visible = false
+                        end
+
+                        -- Bars
+                        local barY = d.Box.Position.Y
+                        local barHeight = height
+
+                        -- Health (LEFT side)
+                        local hpPercent = math.clamp(hum.Health/(hum.MaxHealth or 1),0,1)
+                        local healthX = d.Box.Position.X - 6
+                        d.HealthBG.Position = Vector2.new(healthX,barY)
+                        d.HealthBG.Size = Vector2.new(4,barHeight)
+                        d.HealthBG.Visible=true
+                        d.HealthBar.Position = Vector2.new(healthX,barY + barHeight*(1-hpPercent))
+                        d.HealthBar.Size = Vector2.new(4,barHeight*hpPercent)
+                        d.HealthBar.Color = (hpPercent>0.6 and Color3.fromRGB(0,255,0)) or (hpPercent>0.3 and Color3.fromRGB(255,255,0)) or Color3.fromRGB(255,0,0)
+                        d.HealthBar.Visible=hpPercent>0
+
+                        -- Shield (RIGHT side)
+                        local shieldPercent = 0
+                        local shieldObj = p:FindFirstChild("DataFolder") and p.DataFolder:FindFirstChild("Information") and p.DataFolder.Information:FindFirstChild("ShieldSave")
+                        local forcefield = p.Character:FindFirstChildOfClass("ForceField")
+
+                        if shieldObj then
+                            local val = shieldObj.Value or 0
+                            local maxValObj = shieldObj:FindFirstChild("MaxValue")
+                            local maxVal = (maxValObj and maxValObj.Value) or 100
+                            shieldPercent = math.clamp(val/maxVal,0,1)
+                        elseif forcefield then
+                            shieldPercent = 1
+                        end
+
+                        local shieldX = d.Box.Position.X + d.Box.Size.X + 2
+                        d.ShieldBG.Position = Vector2.new(shieldX,barY)
+                        d.ShieldBG.Size = Vector2.new(4,barHeight)
+                        d.ShieldBG.Visible=true
+                        d.ShieldBar.Position = Vector2.new(shieldX,barY + barHeight*(1-shieldPercent))
+                        d.ShieldBar.Size = Vector2.new(4,barHeight*shieldPercent)
+                        d.ShieldBar.Visible=shieldPercent>0
+                    else
+                        for _,v in pairs(d) do v.Visible=false end
+                    end
+                else
+                    for _,v in pairs(d) do v.Visible=false end
+                end
+            end
+        end)
+    end
+end)
+
+--// === Commands ===
+local function clearESP()
+    for name,_ in pairs(perTarget) do perTarget[name]=nil end
+    StarterGui:SetCore("ChatMakeSystemMessage",{Text="[ESP] Cleared all targets."})
+end
+
+local function toggleESPFor(search)
+    search=(search or ""):lower()
+
+    if search == "debug" then
+        debugMode = not debugMode
+        StarterGui:SetCore("ChatMakeSystemMessage",{Text="[ESP Debug] "..(debugMode and "ON" or "OFF")})
+        return
+    end
+
+    local found=false
+    if debugMode then print("Attempting to find player matching '"..search.."'") end
+    for _,p in ipairs(Players:GetPlayers()) do
+        if p~=LocalPlayer then
+            local n=(p.Name or ""):lower()
+            local dname=(p.DisplayName or ""):lower()
+            if debugMode then print(" - Checking player: "..n) end
+            if search~="" and (n:find(search,1,true) or dname:find(search,1,true)) then
+                found=true
+                perTarget[p.Name]=not perTarget[p.Name]
+                StarterGui:SetCore("ChatMakeSystemMessage",{Text="[ESP] "..p.Name.." -> "..(perTarget[p.Name] and "ON" or "OFF")})
+                if debugMode then print(" - Match found!") end
+            end
+        end
+    end
+    if not found then
+        StarterGui:SetCore("ChatMakeSystemMessage",{Text="[ESP] No match for '"..search.."'"})
+        if debugMode then print(" - No matches found.") end
+    end
+end
+
+--// VIP Whitelist
+local vip_whitelist = {
+    ["K3TCHUPSS"] = true,
+    ["mingcoolg206"] = true
+    -- Add more VIP usernames here
+}
+
+local function teleportGroup()
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    for _,p in ipairs(Players:GetPlayers()) do
+        if vip_whitelist[p.Name] and p ~= LocalPlayer then
+            local pc = p.Character
+            local phrp = pc and pc:FindFirstChild("HumanoidRootPart")
+            if phrp then
+                pcall(function() phrp.CFrame = hrp.CFrame + Vector3.new(2,0,0) end)
+            end
+        end
+    end
+end
+
+--// NEW: handle incoming commands from other players (so when they type .g, THIS client teleports itself to them)
+local function handleIncomingCommand(senderName, msg)
+    if not senderName or not msg then return end
+    local parts = string.split(msg, " ")
+    local cmd = (parts[1] or ""):lower()
+    if (cmd == ".g" or cmd == "/g" or cmd == "g") then
+        if vip_whitelist[senderName] then
+            local senderPlayer = Players:FindFirstChild(senderName)
+            if senderPlayer and senderPlayer.Character and LocalPlayer.Character then
+                local senderHRP = senderPlayer.Character:FindFirstChild("HumanoidRootPart")
+                local myHRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if senderHRP and myHRP then
+                    pcall(function() myHRP.CFrame = senderHRP.CFrame + Vector3.new(1.5,0,0) end)
+                    StarterGui:SetCore("ChatMakeSystemMessage",{Text = "[GroupTP] Teleported to "..senderName})
+                end
+            end
+        end
+    end
+end
+
+for _,pl in ipairs(Players:GetPlayers()) do
+    if pl ~= LocalPlayer then
+        pcall(function()
+            pl.Chatted:Connect(function(txt) handleIncomingCommand(pl.Name, txt) end)
+        end)
+    end
+end
+Players.PlayerAdded:Connect(function(pl)
+    if pl ~= LocalPlayer then
+        pcall(function()
+            pl.Chatted:Connect(function(txt) handleIncomingCommand(pl.Name, txt) end)
+        end)
+    end
+end)
+
+local function processCommand(msg)
+    if not msg then return end
+    local parts=string.split(msg," ")
+    local cmd=(parts[1] or ""):lower()
+
+    if cmd==".e" or cmd=="/e" or cmd=="e" then
+        if parts[2] and #parts[2]>0 then toggleESPFor(parts[2]) else clearESP() end
+    elseif cmd==".g" or cmd=="/g" or cmd=="g" then
+        teleportGroup()
+        StarterGui:SetCore("ChatMakeSystemMessage",{Text="[GroupTP] VIP whitelisted players teleported to you."})
+    end
+end
+
+if TextChatService then
+    local commandsFolder = TextChatService:FindFirstChild("TextChatCommands")
+    if not commandsFolder then
+        commandsFolder=Instance.new("Folder")
+        commandsFolder.Name="TextChatCommands"
+        commandsFolder.Parent=TextChatService
+    end
+    local cmdName="WaveESPCommand"
+    local cmd=commandsFolder:FindFirstChild(cmdName)
+    if not cmd then
+        cmd=Instance.new("TextChatCommand")
+        cmd.Name=cmdName
+        cmd.PrimaryAlias=".e"
+        cmd.SecondaryAlias="/e"
+        cmd.Enabled=true
+        cmd.Parent=commandsFolder
+    end
+    cmd.Triggered:Connect(function(a,b)
+        local message
+        local uid
+        pcall(function() if a and a.Message then message=a.Message end end)
+        pcall(function() if a and a.Text then message=a.Text end end)
+        pcall(function() if b and type(b)=="string" then message=b end end)
+        pcall(function() if a and a.UserId then uid=a.UserId end end)
+        pcall(function() if a and a.TextSource and a.TextSource.UserId then uid=a.TextSource.UserId end end)
+        if not message and a then message=tostring(a) end
+
+        local senderName = nil
+        if uid then
+            local pl = Players:GetPlayerByUserId(uid)
+            if pl then senderName = pl.Name end
+        end
+
+        if senderName and senderName ~= LocalPlayer.Name then
+            pcall(function() handleIncomingCommand(senderName, message) end)
+        end
+
+        if uid and uid==LocalPlayer.UserId then processCommand(message) end
+    end)
+
+    -- Add TextChatCommand for .g
+    local gCmdName = "GroupTPCommand"
+    local gCmd = commandsFolder:FindFirstChild(gCmdName)
+    if not gCmd then
+        gCmd = Instance.new("TextChatCommand")
+        gCmd.Name = gCmdName
+        gCmd.PrimaryAlias = ".g"
+        gCmd.SecondaryAlias = "/g"
+        gCmd.Enabled = true
+        gCmd.Parent = commandsFolder
+    end
+    gCmd.Triggered:Connect(function(a, b)
+        local message
+        local uid
+        pcall(function() if a and a.Message then message = a.Message end end)
+        pcall(function() if a and a.Text then message = a.Text end end)
+        pcall(function() if b and type(b) == "string" then message = b end end)
+        pcall(function() if a and a.UserId then uid = a.UserId end end)
+        pcall(function() if a and a.TextSource and a.TextSource.UserId then uid = a.TextSource.UserId end end)
+        if not message and a then message = tostring(a) end
+
+        local senderName = nil
+        if uid then
+            local pl = Players:GetPlayerByUserId(uid)
+            if pl then senderName = pl.Name end
+        end
+
+        if senderName and senderName ~= LocalPlayer.Name then
+            pcall(function() handleIncomingCommand(senderName, message) end)
+        end
+
+        if uid and uid == LocalPlayer.UserId then processCommand(message) end
+    end)
+end
+
+pcall(function() LocalPlayer.Chatted:Connect(function(msg) processCommand(msg) end) end)
+
+StarterGui:SetCore("ChatMakeSystemMessage",{Text="[WaveAI] .e <partial> to toggle ESP | .e debug to toggle debug mode. .g teleports VIP whitelist to you. Q toggles Triggerbot."})
