@@ -1,6 +1,6 @@
-
+```lua+
 -- LocalScript: Triggerbot + Advanced ESP + Debugging Tools + Group Teleport
--- Replicates original script's .g command with enhanced debugging and RemoteEvent probe.
+-- Matches working script's .g command for actual server-side teleportation.
 
 --// Services
 local Players = game:GetService("Players")
@@ -271,51 +271,51 @@ local BringTargets = {}
 --// Position history to detect server rejection
 local PositionHistory = {}
 
---// Smooth Bring Loop (exact replica from original script)
+--// Smooth Bring Loop (exact replica from working script)
 RunService.RenderStepped:Connect(function()
     for targetName, _ in pairs(BringTargets) do
-        local target = Players:FindFirstChild(targetName)
-        for vipName, _ in pairs(vip_whitelist) do
-            local vip = Players:FindFirstChild(vipName)
-            if vip and target and vip.Character and target.Character and vip ~= target then
-                local vipRoot = vip.Character:FindFirstChild("HumanoidRootPart")
-                local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
+        local targetPlayer = Players:FindFirstChild(targetName)
+        for _, vipName in ipairs(vip_whitelist) do
+            local vipPlayer = Players:FindFirstChild(vipName)
+            if vipPlayer and vipPlayer.Character and targetPlayer and targetPlayer.Character and targetPlayer ~= vipPlayer then
+                local vipRoot = vipPlayer.Character:FindFirstChild("HumanoidRootPart")
+                local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
                 if vipRoot and targetRoot then
                     pcall(function()
                         -- Store previous position for rejection detection
-                        local prevPos = PositionHistory[target.Name] or targetRoot.Position
+                        local prevPos = PositionHistory[targetName] or targetRoot.Position
                         local targetPos = vipRoot.Position + Vector3.new(0, 3, 0)
-                        local dir = (targetPos - targetRoot.Position)
-                        targetRoot.CFrame = targetRoot.CFrame + dir * 0.25
+                        local direction = (targetPos - targetRoot.Position)
+                        targetRoot.CFrame = targetRoot.CFrame + direction * 0.25
 
-                        -- Check if position changed significantly (server rejection)
+                        -- Check for server rejection
                         local currPos = targetRoot.Position
                         local movedDistance = (currPos - prevPos).Magnitude
                         if movedDistance < 0.1 and (currPos - targetPos).Magnitude > 1 then
                             if debugMode then
-                                print("[GroupTP Debug] Possible server rejection for " .. target.Name .. ": Position not updating (moved " .. movedDistance .. " studs)")
+                                print("[GroupTP Debug] Possible server rejection for " .. targetName .. ": Position not updating (moved " .. movedDistance .. " studs)")
                             end
                             -- Attempt RemoteEvent fallback
                             for _, obj in ipairs(ReplicatedStorage:GetChildren()) do
                                 if obj:IsA("RemoteEvent") then
                                     pcall(function()
-                                        obj:FireServer("Teleport", target, CFrame.new(targetPos))
+                                        obj:FireServer("Teleport", targetPlayer, CFrame.new(targetPos))
                                         if debugMode then
-                                            print("[GroupTP Debug] Attempted RemoteEvent " .. obj.Name .. ":FireServer for " .. target.Name .. " to " .. tostring(targetPos))
+                                            print("[GroupTP Debug] Attempted RemoteEvent " .. obj.Name .. ":FireServer for " .. targetName .. " to " .. tostring(targetPos))
                                         end
                                     end)
                                 end
                             end
                         end
 
-                        PositionHistory[target.Name] = currPos
+                        PositionHistory[targetName] = currPos
                         if debugMode then
-                            print("[GroupTP Debug] Smooth CFrame update for " .. target.Name .. " to " .. vip.Name .. " at " .. tostring(targetRoot.CFrame))
+                            print("[GroupTP Debug] Smooth CFrame update for " .. targetName .. " to " .. vipName .. " at " .. tostring(targetRoot.CFrame))
                         end
                     end)
                 else
                     if debugMode then
-                        print("[GroupTP Debug] Failed to bring " .. target.Name .. " to " .. vip.Name .. ": Missing HumanoidRootPart")
+                        print("[GroupTP Debug] Failed to bring " .. targetName .. " to " .. vipName .. ": Missing HumanoidRootPart")
                     end
                 end
             else
@@ -576,3 +576,4 @@ end
 pcall(function() LocalPlayer.Chatted:Connect(function(msg) processCommand(msg) end) end)
 
 StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[WaveAI] .e <partial> to toggle ESP | .e debug to toggle debug mode. .g teleports VIP whitelist to you, .s stops teleport (VIP only). Q toggles Triggerbot."})
+```
