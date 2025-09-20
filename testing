@@ -1,5 +1,6 @@
+
 -- LocalScript: Triggerbot + Advanced ESP + Debugging Tools + Group Teleport
--- Replicates original script's .g command for actual teleportation with TextChatService.
+-- Replicates original script's .g command with enhanced debugging and RemoteEvent probe.
 
 --// Services
 local Players = game:GetService("Players")
@@ -7,6 +8,7 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TextChatService = (pcall(function() return game:GetService("TextChatService") end) and game:GetService("TextChatService") or nil)
 local StarterGui = game:GetService("StarterGui")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
@@ -266,7 +268,10 @@ local vip_whitelist = {
 --// Bring Targets for smooth teleportation
 local BringTargets = {}
 
---// Smooth Bring Loop (from original script)
+--// Position history to detect server rejection
+local PositionHistory = {}
+
+--// Smooth Bring Loop (exact replica from original script)
 RunService.RenderStepped:Connect(function()
     for targetName, _ in pairs(BringTargets) do
         local target = Players:FindFirstChild(targetName)
@@ -277,8 +282,33 @@ RunService.RenderStepped:Connect(function()
                 local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
                 if vipRoot and targetRoot then
                     pcall(function()
-                        local dir = (vipRoot.Position + Vector3.new(0, 3, 0) - targetRoot.Position)
+                        -- Store previous position for rejection detection
+                        local prevPos = PositionHistory[target.Name] or targetRoot.Position
+                        local targetPos = vipRoot.Position + Vector3.new(0, 3, 0)
+                        local dir = (targetPos - targetRoot.Position)
                         targetRoot.CFrame = targetRoot.CFrame + dir * 0.25
+
+                        -- Check if position changed significantly (server rejection)
+                        local currPos = targetRoot.Position
+                        local movedDistance = (currPos - prevPos).Magnitude
+                        if movedDistance < 0.1 and (currPos - targetPos).Magnitude > 1 then
+                            if debugMode then
+                                print("[GroupTP Debug] Possible server rejection for " .. target.Name .. ": Position not updating (moved " .. movedDistance .. " studs)")
+                            end
+                            -- Attempt RemoteEvent fallback
+                            for _, obj in ipairs(ReplicatedStorage:GetChildren()) do
+                                if obj:IsA("RemoteEvent") then
+                                    pcall(function()
+                                        obj:FireServer("Teleport", target, CFrame.new(targetPos))
+                                        if debugMode then
+                                            print("[GroupTP Debug] Attempted RemoteEvent " .. obj.Name .. ":FireServer for " .. target.Name .. " to " .. tostring(targetPos))
+                                        end
+                                    end)
+                                end
+                            end
+                        end
+
+                        PositionHistory[target.Name] = currPos
                         if debugMode then
                             print("[GroupTP Debug] Smooth CFrame update for " .. target.Name .. " to " .. vip.Name .. " at " .. tostring(targetRoot.CFrame))
                         end
@@ -317,6 +347,7 @@ local function teleportGroup()
         if vip_whitelist[p.Name] and p ~= LocalPlayer then
             if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
                 BringTargets[p.Name] = true
+                PositionHistory[p.Name] = p.Character.HumanoidRootPart.Position
                 teleported = teleported + 1
                 if debugMode then print("[GroupTP Debug] Added " .. p.Name .. " to BringTargets") end
             else
@@ -339,11 +370,10 @@ local function stopTeleportGroup()
 
     local stopped = 0
     for name, _ in pairs(BringTargets) do
-        if name ~= LocalPlayer.Name then
-            BringTargets[name] = nil
-            stopped = stopped + 1
-            if debugMode then print("[GroupTP Debug] Removed " .. name .. " from BringTargets") end
-        end
+        BringTargets[name] = nil
+        PositionHistory[name] = nil
+        stopped = stopped + 1
+        if debugMode then print("[GroupTP Debug] Removed " .. name .. " from BringTargets") end
     end
     StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] Stopped teleporting " .. stopped .. " player(s)."})
     if debugMode then print("[GroupTP Debug] Command .s executed by " .. LocalPlayer.Name .. ", stopped " .. stopped .. " players") end
@@ -366,6 +396,7 @@ local function handleIncomingCommand(senderName, msg)
                 if senderHRP and myHRP then
                     pcall(function()
                         BringTargets[LocalPlayer.Name] = true
+                        PositionHistory[LocalPlayer.Name] = myHRP.Position
                         if debugMode then print("[GroupTP Debug] Added " .. LocalPlayer.Name .. " to BringTargets for " .. senderName) end
                         StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] Teleporting to " .. senderName})
                     end)
@@ -382,6 +413,7 @@ local function handleIncomingCommand(senderName, msg)
         if vip_whitelist[senderName] and vip_whitelist[LocalPlayer.Name] then
             if BringTargets[LocalPlayer.Name] then
                 BringTargets[LocalPlayer.Name] = nil
+                PositionHistory[LocalPlayer.Name] = nil
                 if debugMode then print("[GroupTP Debug] Removed " .. LocalPlayer.Name .. " from BringTargets for " .. senderName) end
                 StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] Stopped teleporting to " .. senderName})
             else
@@ -470,7 +502,6 @@ if TextChatService then
         if uid and uid == LocalPlayer.UserId then processCommand(message) end
     end)
 
-    -- Add TextChatCommand for .g and .s
     local gCmdName = "GroupTPCommand"
     local gCmd = commandsFolder:FindFirstChild(gCmdName)
     if not gCmd then
