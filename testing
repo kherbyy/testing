@@ -1,6 +1,5 @@
-
 -- LocalScript: Triggerbot + Advanced ESP + Debugging Tools + Group Teleport
--- This is the final, optimized script with all requested features. .g teleports VIP whitelisted players.
+-- Optimized with smooth bring loop from shared script for actual teleportation.
 
 --// Services
 local Players = game:GetService("Players")
@@ -8,6 +7,7 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TextChatService = (pcall(function() return game:GetService("TextChatService") end) and game:GetService("TextChatService") or nil)
 local StarterGui = game:GetService("StarterGui")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
@@ -257,7 +257,7 @@ local function toggleESPFor(search)
     end
 end
 
---// VIP Whitelist (only these players can use .g and be teleported)
+--// VIP Whitelist (only these players can use .g/.s and be teleported)
 local vip_whitelist = {
     ["misiuperc568"] = true,
     ["afasterpl11"] = true
@@ -278,9 +278,15 @@ RunService.RenderStepped:Connect(function()
                 local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
                 if vipRoot and targetRoot then
                     pcall(function()
-                        local dir = (vipRoot.Position + Vector3.new(2, 0, 0) - targetRoot.Position)
-                        targetRoot.CFrame = targetRoot.CFrame + dir * 0.25
-                        print("[GroupTP Debug] Smooth CFrame update for " .. target.Name .. " to " .. vip.Name .. " at " .. tostring(targetRoot.CFrame))
+                        local remote = ReplicatedStorage:FindFirstChild("Remote")
+                        if remote and remote:IsA("RemoteEvent") then
+                            remote:FireServer("Teleport", target, vipRoot.CFrame + Vector3.new(2, 0, 0))
+                            print("[GroupTP Debug] Fired Remote:Teleport for " .. target.Name .. " to " .. vip.Name)
+                        else
+                            local dir = (vipRoot.Position + Vector3.new(2, 0, 0) - targetRoot.Position)
+                            targetRoot.CFrame = targetRoot.CFrame + dir * 0.25
+                            print("[GroupTP Debug] Smooth CFrame update for " .. target.Name .. " to " .. vip.Name .. " at " .. tostring(targetRoot.CFrame))
+                        end
                     end)
                 else
                     print("[GroupTP Debug] Failed to bring " .. target.Name .. " to " .. vip.Name .. ": Missing HumanoidRootPart")
@@ -293,7 +299,6 @@ RunService.RenderStepped:Connect(function()
 end)
 
 local function teleportGroup()
-    -- Check if local player is in vip_whitelist
     if not vip_whitelist[LocalPlayer.Name] then
         StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] You are not in the VIP whitelist."})
         print("[GroupTP Debug] Local player " .. LocalPlayer.Name .. " not in vip_whitelist")
@@ -326,7 +331,26 @@ local function teleportGroup()
     print("[GroupTP Debug] Command .g executed by " .. LocalPlayer.Name .. ", teleporting " .. teleported .. " players")
 end
 
---// Handle incoming .g commands from other VIP players
+local function stopTeleportGroup()
+    if not vip_whitelist[LocalPlayer.Name] then
+        StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] You are not in the VIP whitelist."})
+        print("[GroupTP Debug] Local player " .. LocalPlayer.Name .. " not in vip_whitelist for .s")
+        return
+    end
+
+    local stopped = 0
+    for name, _ in pairs(BringTargets) do
+        if name ~= LocalPlayer.Name then
+            BringTargets[name] = nil
+            stopped = stopped + 1
+            print("[GroupTP Debug] Removed " .. name .. " from BringTargets")
+        end
+    end
+    StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] Stopped teleporting " .. stopped .. " player(s)."})
+    print("[GroupTP Debug] Command .s executed by " .. LocalPlayer.Name .. ", stopped " .. stopped .. " players")
+end
+
+--// Handle incoming .g/.s commands from other VIP players
 local function handleIncomingCommand(senderName, msg)
     if not senderName or not msg then
         print("[GroupTP Debug] Invalid senderName or msg: " .. tostring(senderName) .. ", " .. tostring(msg))
@@ -354,6 +378,18 @@ local function handleIncomingCommand(senderName, msg)
             end
         else
             print("[GroupTP Debug] Ignored .g from " .. senderName .. ": Not in VIP whitelist or local player not VIP")
+        end
+    elseif (cmd == ".s" or cmd == "/s" or cmd == "s") then
+        if vip_whitelist[senderName] and vip_whitelist[LocalPlayer.Name] then
+            if BringTargets[LocalPlayer.Name] then
+                BringTargets[LocalPlayer.Name] = nil
+                print("[GroupTP Debug] Removed " .. LocalPlayer.Name .. " from BringTargets for " .. senderName)
+                StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] Stopped teleporting to " .. senderName})
+            else
+                print("[GroupTP Debug] Ignored .s from " .. senderName .. ": Not in BringTargets")
+            end
+        else
+            print("[GroupTP Debug] Ignored .s from " .. senderName .. ": Not in VIP whitelist or local player not VIP")
         end
     end
 end
@@ -386,6 +422,9 @@ local function processCommand(msg)
     elseif cmd == ".g" or cmd == "/g" or cmd == "g" then
         print("[GroupTP Debug] Processing .g command from " .. LocalPlayer.Name)
         teleportGroup()
+    elseif cmd == ".s" or cmd == "/s" or cmd == "s" then
+        print("[GroupTP Debug] Processing .s command from " .. LocalPlayer.Name)
+        stopTeleportGroup()
     end
 end
 
@@ -432,7 +471,7 @@ if TextChatService then
         if uid and uid == LocalPlayer.UserId then processCommand(message) end
     end)
 
-    -- Add TextChatCommand for .g
+    -- Add TextChatCommand for .g and .s
     local gCmdName = "GroupTPCommand"
     local gCmd = commandsFolder:FindFirstChild(gCmdName)
     if not gCmd then
@@ -467,8 +506,43 @@ if TextChatService then
 
         if uid and uid == LocalPlayer.UserId then processCommand(message) end
     end)
+
+    local sCmdName = "GroupStopCommand"
+    local sCmd = commandsFolder:FindFirstChild(sCmdName)
+    if not sCmd then
+        sCmd = Instance.new("TextChatCommand")
+        sCmd.Name = sCmdName
+        sCmd.PrimaryAlias = ".s"
+        sCmd.SecondaryAlias = "/s"
+        sCmd.Enabled = true
+        sCmd.Parent = commandsFolder
+        print("[GroupTP Debug] Created GroupStopCommand")
+    end
+    sCmd.Triggered:Connect(function(a, b)
+        local message
+        local uid
+        pcall(function() if a and a.Message then message = a.Message end end)
+        pcall(function() if a and a.Text then message = a.Text end end)
+        pcall(function() if b and type(b) == "string" then message = b end end)
+        pcall(function() if a and a.UserId then uid = a.UserId end end)
+        pcall(function() if a and a.TextSource and a.TextSource.UserId then uid = a.TextSource.UserId end end)
+        if not message and a then message = tostring(a) end
+
+        local senderName = nil
+        if uid then
+            local pl = Players:GetPlayerByUserId(uid)
+            if pl then senderName = pl.Name end
+        end
+
+        print("[GroupTP Debug] TextChatCommand .s triggered by " .. tostring(senderName) .. ": " .. tostring(message))
+        if senderName and senderName ~= LocalPlayer.Name then
+            pcall(function() handleIncomingCommand(senderName, message) end)
+        end
+
+        if uid and uid == LocalPlayer.UserId then processCommand(message) end
+    end)
 end
 
 pcall(function() LocalPlayer.Chatted:Connect(function(msg) processCommand(msg) end) end)
 
-StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[WaveAI] .e <partial> to toggle ESP | .e debug to toggle debug mode. .g teleports VIP whitelist to you (VIP only). Q toggles Triggerbot."})
+StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[WaveAI] .e <partial> to toggle ESP | .e debug to toggle debug mode. .g teleports VIP whitelist to you, .s stops teleport (VIP only). Q toggles Triggerbot."})
