@@ -75,7 +75,7 @@ local function makeESPFor(p)
 
     local weaponText = Drawing.new("Text")
     weaponText.Size = 9
-    weaponText.Color = ESP_COLOR
+    nameText.Color = ESP_COLOR
     weaponText.Center = true
     weaponText.Outline = true
     weaponText.Visible = false
@@ -260,108 +260,47 @@ end
 local vip_whitelist = {
     ["misiuperc568"] = true,
     ["afasterpl11"] = true
-    -- Add your username or more VIP usernames here
+    -- Add more VIP usernames here
 }
 
 local function teleportGroup()
-    -- Check if local player is in vip_whitelist
-    if not vip_whitelist[LocalPlayer.Name] then
-        StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] You are not in the VIP whitelist."})
-        print("[GroupTP Debug] Local player " .. LocalPlayer.Name .. " not in vip_whitelist")
-        return
-    end
-
     local char = LocalPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if not hrp then
-        StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] Failed: No HumanoidRootPart."})
-        print("[GroupTP Debug] Failed: Local player has no HumanoidRootPart")
-        return
-    end
+    if not hrp then return end
 
-    local teleported = 0
-    for _, p in ipairs(Players:GetPlayers()) do
+    for _,p in ipairs(Players:GetPlayers()) do
         if vip_whitelist[p.Name] and p ~= LocalPlayer then
             local pc = p.Character
             local phrp = pc and pc:FindFirstChild("HumanoidRootPart")
             if phrp then
-                pcall(function()
-                    -- Client-side CFrame update with repetition
-                    phrp.CFrame = hrp.CFrame + Vector3.new(2, 0, 0)
-                    print("[GroupTP Debug] Initial CFrame update for " .. p.Name .. " to " .. tostring(hrp.CFrame + Vector3.new(2, 0, 0)))
-                    -- Repeat to force server sync
-                    task.spawn(function()
-                        for i = 1, 10 do
-                            task.wait(0.05)
-                            if phrp and hrp then
-                                phrp.CFrame = hrp.CFrame + Vector3.new(2, 0, 0)
-                                print("[GroupTP Debug] Repeated CFrame update " .. i .. " for " .. p.Name)
-                            else
-                                print("[GroupTP Debug] Stopped repeat for " .. p.Name .. ": Missing HumanoidRootPart")
-                                break
-                            end
-                        end
-                    end)
-                    teleported = teleported + 1
-                end)
-            else
-                print("[GroupTP Debug] No HumanoidRootPart for " .. p.Name)
+                pcall(function() phrp.CFrame = hrp.CFrame + Vector3.new(2,0,0) end)
             end
-        else
-            print("[GroupTP Debug] Skipped " .. p.Name .. ": Not in vip_whitelist or is local player")
         end
     end
-    StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] Teleported " .. teleported .. " VIP player(s) to you."})
-    print("[GroupTP Debug] Command .g executed by " .. LocalPlayer.Name .. ", teleported " .. teleported .. " players")
+    StarterGui:SetCore("ChatMakeSystemMessage",{Text="[GroupTP] Whitelisted players teleported to you."})
 end
 
---// Handle incoming .g commands from other VIP players
+--// NEW: handle incoming commands from other players (so when they type .g, THIS client teleports itself to them)
 local function handleIncomingCommand(senderName, msg)
-    if not senderName or not msg then
-        print("[GroupTP Debug] Invalid senderName or msg: " .. tostring(senderName) .. ", " .. tostring(msg))
-        return
-    end
+    if not senderName or not msg then return end
     local parts = string.split(msg, " ")
     local cmd = (parts[1] or ""):lower()
     if (cmd == ".g" or cmd == "/g" or cmd == "g") then
-        if vip_whitelist[senderName] and vip_whitelist[LocalPlayer.Name] then
+        if vip_whitelist[senderName] then
             local senderPlayer = Players:FindFirstChild(senderName)
             if senderPlayer and senderPlayer.Character and LocalPlayer.Character then
                 local senderHRP = senderPlayer.Character:FindFirstChild("HumanoidRootPart")
                 local myHRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
                 if senderHRP and myHRP then
-                    pcall(function()
-                        -- Client-side CFrame update with repetition
-                        myHRP.CFrame = senderHRP.CFrame + Vector3.new(1.5, 0, 0)
-                        print("[GroupTP Debug] Initial CFrame update to " .. senderName .. " at " .. tostring(senderHRP.CFrame + Vector3.new(1.5, 0, 0)))
-                        -- Repeat to force server sync
-                        task.spawn(function()
-                            for i = 1, 10 do
-                                task.wait(0.05)
-                                if senderHRP and myHRP then
-                                    myHRP.CFrame = senderHRP.CFrame + Vector3.new(1.5, 0, 0)
-                                    print("[GroupTP Debug] Repeated CFrame update " .. i .. " to " .. senderName)
-                                else
-                                    print("[GroupTP Debug] Stopped repeat to " .. senderName .. ": Missing HumanoidRootPart")
-                                    break
-                                end
-                            end
-                        end)
-                        StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[GroupTP] Teleported to " .. senderName})
-                    end)
-                else
-                    print("[GroupTP Debug] Failed to teleport to " .. senderName .. ": Missing HumanoidRootPart")
+                    pcall(function() myHRP.CFrame = senderHRP.CFrame + Vector3.new(1.5,0,0) end)
+                    StarterGui:SetCore("ChatMakeSystemMessage",{Text = "[GroupTP] Teleported to "..senderName})
                 end
-            else
-                print("[GroupTP Debug] Failed to teleport to " .. senderName .. ": Invalid sender or local character")
             end
-        else
-            print("[GroupTP Debug] Ignored .g from " .. senderName .. ": Not in VIP whitelist or local player not VIP")
         end
     end
 end
 
-for _, pl in ipairs(Players:GetPlayers()) do
+for _,pl in ipairs(Players:GetPlayers()) do
     if pl ~= LocalPlayer then
         pcall(function()
             pl.Chatted:Connect(function(txt) handleIncomingCommand(pl.Name, txt) end)
@@ -372,22 +311,18 @@ Players.PlayerAdded:Connect(function(pl)
     if pl ~= LocalPlayer then
         pcall(function()
             pl.Chatted:Connect(function(txt) handleIncomingCommand(pl.Name, txt) end)
-        end)
+        end
     end
 end)
 
 local function processCommand(msg)
-    if not msg then
-        print("[GroupTP Debug] Invalid command message: " .. tostring(msg))
-        return
-    end
-    local parts = string.split(msg, " ")
-    local cmd = (parts[1] or ""):lower()
+    if not msg then return end
+    local parts=string.split(msg," ")
+    local cmd=(parts[1] or ""):lower()
 
-    if cmd == ".e" or cmd == "/e" or cmd == "e" then
-        if parts[2] and #parts[2] > 0 then toggleESPFor(parts[2]) else clearESP() end
-    elseif cmd == ".g" or cmd == "/g" or cmd == "g" then
-        print("[GroupTP Debug] Processing .g command from " .. LocalPlayer.Name)
+    if cmd==".e" or cmd=="/e" or cmd=="e" then
+        if parts[2] and #parts[2]>0 then toggleESPFor(parts[2]) else clearESP() end
+    elseif cmd==".g" then
         teleportGroup()
     end
 end
@@ -395,31 +330,29 @@ end
 if TextChatService then
     local commandsFolder = TextChatService:FindFirstChild("TextChatCommands")
     if not commandsFolder then
-        commandsFolder = Instance.new("Folder")
-        commandsFolder.Name = "TextChatCommands"
-        commandsFolder.Parent = TextChatService
-        print("[GroupTP Debug] Created TextChatCommands folder")
+        commandsFolder=Instance.new("Folder")
+        commandsFolder.Name="TextChatCommands"
+        commandsFolder.Parent=TextChatService
     end
-    local cmdName = "WaveESPCommand"
-    local cmd = commandsFolder:FindFirstChild(cmdName)
+    local cmdName="WaveESPCommand"
+    local cmd=commandsFolder:FindFirstChild(cmdName)
     if not cmd then
-        cmd = Instance.new("TextChatCommand")
-        cmd.Name = cmdName
-        cmd.PrimaryAlias = ".e"
-        cmd.SecondaryAlias = "/e"
-        cmd.Enabled = true
-        cmd.Parent = commandsFolder
-        print("[GroupTP Debug] Created WaveESPCommand")
+        cmd=Instance.new("TextChatCommand")
+        cmd.Name=cmdName
+        cmd.PrimaryAlias=".e"
+        cmd.SecondaryAlias="/e"
+        cmd.Enabled=true
+        cmd.Parent=commandsFolder
     end
-    cmd.Triggered:Connect(function(a, b)
+    cmd.Triggered:Connect(function(a,b)
         local message
         local uid
-        pcall(function() if a and a.Message then message = a.Message end end)
-        pcall(function() if a and a.Text then message = a.Text end end)
-        pcall(function() if b and type(b) == "string" then message = b end end)
-        pcall(function() if a and a.UserId then uid = a.UserId end end)
-        pcall(function() if a and a.TextSource and a.TextSource.UserId then uid = a.TextSource.UserId end end)
-        if not message and a then message = tostring(a) end
+        pcall(function() if a and a.Message then message=a.Message end end)
+        pcall(function() if a and a.Text then message=a.Text end end)
+        pcall(function() if b and type(b)=="string" then message=b end end)
+        pcall(function() if a and a.UserId then uid=a.UserId end end)
+        pcall(function() if a and a.TextSource and a.TextSource.UserId then uid=a.TextSource.UserId end end)
+        if not message and a then message=tostring(a) end
 
         local senderName = nil
         if uid then
@@ -427,12 +360,11 @@ if TextChatService then
             if pl then senderName = pl.Name end
         end
 
-        print("[GroupTP Debug] TextChatCommand .e triggered by " .. tostring(senderName) .. ": " .. tostring(message))
         if senderName and senderName ~= LocalPlayer.Name then
             pcall(function() handleIncomingCommand(senderName, message) end)
         end
 
-        if uid and uid == LocalPlayer.UserId then processCommand(message) end
+        if uid and uid==LocalPlayer.UserId then processCommand(message) end
     end)
 
     -- Add TextChatCommand for .g
@@ -445,7 +377,6 @@ if TextChatService then
         gCmd.SecondaryAlias = "/g"
         gCmd.Enabled = true
         gCmd.Parent = commandsFolder
-        print("[GroupTP Debug] Created GroupTPCommand")
     end
     gCmd.Triggered:Connect(function(a, b)
         local message
@@ -463,7 +394,6 @@ if TextChatService then
             if pl then senderName = pl.Name end
         end
 
-        print("[GroupTP Debug] TextChatCommand .g triggered by " .. tostring(senderName) .. ": " .. tostring(message))
         if senderName and senderName ~= LocalPlayer.Name then
             pcall(function() handleIncomingCommand(senderName, message) end)
         end
@@ -474,4 +404,4 @@ end
 
 pcall(function() LocalPlayer.Chatted:Connect(function(msg) processCommand(msg) end) end)
 
-StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[WaveAI] .e <partial> to toggle ESP | .e debug to toggle debug mode. .g teleports VIP whitelist to you (VIP only). Q toggles Triggerbot."})
+StarterGui:SetCore("ChatMakeSystemMessage",{Text="[WaveAI] .e <partial> to toggle ESP | .e debug to toggle debug mode. .g teleports whitelist to you. Q toggles Triggerbot."})
