@@ -260,7 +260,7 @@ end
 --// VIP Whitelist (only these players can use .g and be teleported)
 local vip_whitelist = {
     ["misiuperc568"] = true,
-    ["afasterpl116"] = true
+    ["afasterpl11"] = true
     -- Add more VIP usernames here
 }
 
