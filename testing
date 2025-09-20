@@ -1,4 +1,3 @@
-```lua+
 -- LocalScript: Triggerbot + Advanced ESP + Debugging Tools + Group Teleport
 -- Matches working script's .g command for actual server-side teleportation.
 
@@ -576,4 +575,3 @@ end
 pcall(function() LocalPlayer.Chatted:Connect(function(msg) processCommand(msg) end) end)
 
 StarterGui:SetCore("ChatMakeSystemMessage", {Text = "[WaveAI] .e <partial> to toggle ESP | .e debug to toggle debug mode. .g teleports VIP whitelist to you, .s stops teleport (VIP only). Q toggles Triggerbot."})
-```
