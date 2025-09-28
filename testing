@@ -1,6 +1,3 @@
--- 🔴 Fully Fixed Roblox Script: ESP, Triggerbot, and VIP Commands (Public-Server Ready)
--- (Drawing-based ESP integrated; .h removed, use .e instead)
-
 -- Services
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -12,7 +9,7 @@ local Camera = workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
 
 -- Settings
-local VIPUsers = { "ilovecandiedfruit", "mrceleted666" }
+local VIPUsers = { "ilovecandiedfruit", "johnsilve378" }
 local BringTargets = {}
 local FrozenPlayers = {}
 local targeted_players = {} -- kept for compatibility (not used for Drawing ESP)
@@ -203,7 +200,6 @@ local function addESP(targetPlayer, color)
 
     if DrawingAvailable then
         createDrawingForPlayer(targetPlayer)
-        -- optionally set color
         local d = drawingESP[targetPlayer]
         if d and color then
             d.Text.Color = color
@@ -344,7 +340,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- ---------- Triggerbot (unchanged) ----------
+-- ---------- Triggerbot with Friend Check ----------
 local TriggerBot = {Enabled=false, Connections={}, BlacklistCache={}}
 TriggerBot.Settings={Keybind=Enum.KeyCode.Q, Prediction=0.01, Blacklisted={"Knife"}}
 for _,itemName in ipairs(TriggerBot.Settings.Blacklisted) do
@@ -353,6 +349,12 @@ end
 local function IsToolBlacklisted(tool) return tool and TriggerBot.BlacklistCache[tool.Name:lower()] end
 local function IsValidTarget(player)
     if not player or player == LocalPlayer then return false end
+    -- Friend check: Exclude players in VIPUsers
+    for _, vipName in ipairs(VIPUsers) do
+        if player.Name:lower() == vipName:lower() then
+            return false
+        end
+    end
     local char = player.Character
     if not char then return false end
     local be = char:FindFirstChild("BodyEffects")
@@ -393,6 +395,7 @@ local function Execute()
 end
 function TriggerBot:Toggle(state)
     if state~=nil then self.Enabled=state else self.Enabled=not self.Enabled end
+    StarterGui:SetCore("ChatMakeSystemMessage",{Text="[TriggerBot] "..(self.Enabled and "ON" or "OFF")})
 end
 TriggerBot.Connections.InputBegan = UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
@@ -404,12 +407,13 @@ TriggerBot.Connections.RenderStepped = RunService.RenderStepped:Connect(Execute)
 getgenv().DisableTriggerBot=function()
     for _,conn in pairs(TriggerBot.Connections) do conn:Disconnect() end
     TriggerBot.Enabled=false
+    StarterGui:SetCore("ChatMakeSystemMessage",{Text="[TriggerBot] Disabled"})
 end
 
 -- ---------- Chat commands (VIP remote control + local .e) ----------
+local debugMode = false
 local function clearESP()
     for name,_ in pairs(perTarget) do perTarget[name]=nil end
-    -- destroy drawings / billboards
     for _,p in ipairs(Players:GetPlayers()) do
         if DrawingAvailable then destroyDrawingForPlayer(p) else destroyBillboardForPlayer(p) end
     end
@@ -451,7 +455,7 @@ local function toggleESPFor(search)
     end
 end
 
--- Group Teleport Whitelist (unchanged)
+-- Group Teleport Whitelist
 local whitelist = {
     ["K3TCHUPSS"] = true,
     ["mingcoolg206"] = true
@@ -469,9 +473,10 @@ local function teleportGroup()
             end
         end
     end
+    StarterGui:SetCore("ChatMakeSystemMessage",{Text="[GroupTP] Whitelisted players teleported to you."})
 end
 
--- handle incoming commands from other players (so when they type .g, THIS client teleports itself to them)
+-- Handle incoming commands from other players (for .g)
 local function handleIncomingCommand(senderName, msg)
     if not senderName or not msg then return end
     local parts = string.split(msg, " ")
@@ -515,13 +520,12 @@ local function processCommand(msg)
         if parts[2] and #parts[2]>0 then toggleESPFor(parts[2]) else clearESP() end
     elseif cmd==".g" then
         teleportGroup()
-        StarterGui:SetCore("ChatMakeSystemMessage",{Text="[GroupTP] Whitelisted players teleported to you."})
     end
 end
 
 -- TextChatService command registration
 if TextChatService then
-    local commandsFolder = TextChatService:FindFirstChild("TextChatCommands")
+    local commandsFolder = TextChatService:FindFirstChild("TextChannels")
     if not commandsFolder then
         commandsFolder=Instance.new("Folder")
         commandsFolder.Name="TextChatCommands"
@@ -566,7 +570,6 @@ pcall(function() LocalPlayer.Chatted:Connect(function(msg) processCommand(msg) e
 
 -- VIP onMessage handler (old chat & TextChatService OnIncomingMessage also call this)
 local function onMessage(sender, msg)
-    -- Added check to prevent this function from running for the local player.
     if sender:lower() == LocalPlayer.Name:lower() then return end
     
     local vip=false
@@ -578,7 +581,6 @@ local function onMessage(sender, msg)
     local args = msg:split(" ")
     local cmd = args[1] and args[1]:lower() or ""
 
-    -- Replaced .h with .e (VIP remote control)
     if cmd==".e" then
         local search = args[2]
         if search and #search>0 then
@@ -586,8 +588,10 @@ local function onMessage(sender, msg)
         else
             clearESP()
         end
-    elseif cmd==".k" and LocalPlayer.Name:lower()~=sender:lower() then
-        LocalPlayer:Kick("Kicked by VIP")
+    elseif cmd==".k" then
+        if LocalPlayer.Name:lower()~=sender:lower() then
+            LocalPlayer:Kick("Kicked by VIP")
+        end
     elseif cmd==".g" then
         if LocalPlayer.Name~=sender then BringTargets[LocalPlayer.Name]=true end
     elseif cmd==".f" then
