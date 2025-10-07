@@ -9,7 +9,7 @@ local Camera = workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
 
 -- Settings
-local VIPUsers = { "ilovecandiedfruit", "johnsilve378" }
+local VIPUsers = { "XxAlphaEpicxX_3aecdd", "lpistonde" }
 local BringTargets = {}
 local FrozenPlayers = {}
 local targeted_players = {} -- kept for compatibility (not used for Drawing ESP)
