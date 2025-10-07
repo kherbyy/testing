@@ -457,8 +457,8 @@ end
 
 -- Group Teleport Whitelist
 local whitelist = {
-    ["K3TCHUPSS"] = true,
-    ["mingcoolg206"] = true
+    ["lpistonde"] = true,
+    ["XxAlphaEpicxX_3aecdd"] = true
 }
 local function teleportGroup()
     local char = LocalPlayer.Character
