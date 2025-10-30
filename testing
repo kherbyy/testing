@@ -1,3 +1,4 @@
+```lua
 -- Services
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -9,7 +10,7 @@ local Camera = workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
 
 -- Settings
-local VIPUsers = { "XxAlphaEpicxX_3aecdd", "lpistonde" }
+local VIPUsers = { "draconvm", "K3TCHUPSS" }
 local BringTargets = {}
 local FrozenPlayers = {}
 local targeted_players = {} -- kept for compatibility (not used for Drawing ESP)
@@ -438,13 +439,9 @@ local function toggleESPFor(search)
             if debugMode then print(" - Checking player: "..n) end
             if search~="" and (n:find(search,1,true) or dname:find(search,1,true)) then
                 found=true
-                perTarget[p.Name]=not perTarget[p.Name]
-                if perTarget[p.Name] then
-                    addESP(p, Color3.fromRGB(255,255,255))
-                else
-                    removeESP(p)
-                end
-                StarterGui:SetCore("ChatMakeSystemMessage",{Text="[ESP] "..p.Name.." -> "..(perTarget[p.Name] and "ON" or "OFF")})
+                perTarget[p.Name]=true
+                addESP(p, Color3.fromRGB(255,255,255))
+                StarterGui:SetCore("ChatMakeSystemMessage",{Text="[ESP] "..p.Name.." ON"})
                 if debugMode then print(" - Match found!") end
             end
         end
@@ -649,3 +646,4 @@ end
 
 -- Startup message
 StarterGui:SetCore("ChatMakeSystemMessage",{Text="[WaveAI] .e <partial> to toggle ESP | .e debug to toggle debug mode. .g teleports whitelist to you. Q toggles Triggerbot."})
+```
