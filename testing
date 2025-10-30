@@ -1,4 +1,4 @@
-```lua
+
 -- Services
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -10,7 +10,7 @@ local Camera = workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
 
 -- Settings
-local VIPUsers = { "draconvm", "K3TCHUPSS" }
+local VIPUsers = { "XxAlphaEpicxX_3aecdd", "lpistonde" }
 local BringTargets = {}
 local FrozenPlayers = {}
 local targeted_players = {} -- kept for compatibility (not used for Drawing ESP)
@@ -646,4 +646,3 @@ end
 
 -- Startup message
 StarterGui:SetCore("ChatMakeSystemMessage",{Text="[WaveAI] .e <partial> to toggle ESP | .e debug to toggle debug mode. .g teleports whitelist to you. Q toggles Triggerbot."})
-```
